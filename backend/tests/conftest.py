@@ -6,11 +6,19 @@ class InMemoryRedis:
 
     def __init__(self):
         self.counts = {}
+        self.revoked = set()
 
     def eval(self, script, number_of_keys, key, window_seconds):
         count = self.counts.get(key, 0) + 1
         self.counts[key] = count
         return [count, window_seconds]
+
+    def exists(self, key):
+        return int(key in self.revoked)
+
+    def set(self, key, value, ex=None):
+        self.revoked.add(key)
+        return True
 
 
 @pytest.fixture(autouse=True)
