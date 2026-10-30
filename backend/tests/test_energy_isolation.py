@@ -163,7 +163,7 @@ def test_owner_can_store_tariff_and_reading_with_valid_intervals():
         },
     )
     assert reading.status_code == 201
-    assert client.get(reading_path, headers=headers(owner)).json()[0]["consumption_kwh"] == "0.125"
+    assert float(client.get(reading_path, headers=headers(owner)).json()[0]["consumption_kwh"]) == 0.125
 
 
 def test_duplicate_account_and_reading_intervals_are_rejected():
