@@ -26,6 +26,7 @@ client = TestClient(app)
 
 
 def setup_function():
+    app.dependency_overrides[get_db] = override_get_db
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
@@ -52,6 +53,12 @@ def test_energy_accounts_are_scoped_to_household_and_role():
     outsider = register("outsider@example.com")
     home_id = household(owner, "Owner home")
     other_home_id = household(outsider, "Other home")
+    joined = client.post(
+        f"/api/v1/households/{home_id}/members",
+        headers=headers(owner),
+        json={"email": "member@example.com", "role": "member"},
+    )
+    assert joined.status_code == 201
 
     created = client.post(
         f"/api/v1/households/{home_id}/energy-accounts",
