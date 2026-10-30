@@ -22,6 +22,10 @@ class LoginRequest(BaseModel):
         return str(value).strip().casefold()
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str = Field(min_length=32, max_length=512)
+
+
 class UserResponse(BaseModel):
     id: str
     email: EmailStr
@@ -33,4 +37,6 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+    refresh_token: str
+    refresh_expires_in: int
     user: UserResponse
