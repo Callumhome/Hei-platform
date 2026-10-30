@@ -180,3 +180,53 @@ class HomeAssistantConnection(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+class Property(Base):
+    __tablename__ = "properties"
+    __table_args__ = (UniqueConstraint("household_id", "property_ref", name="uq_property_household_ref"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    household_id: Mapped[str] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), index=True)
+    property_ref: Mapped[str] = mapped_column(String(80), nullable=False)
+    address_line_1: Mapped[str] = mapped_column(String(160), nullable=False)
+    address_line_2: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    town: Mapped[str] = mapped_column(String(120), nullable=False)
+    county: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    postcode: Mapped[str] = mapped_column(String(12), nullable=False, index=True)
+    country_code: Mapped[str] = mapped_column(String(2), default="GB", nullable=False)
+    address_source: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    address_source_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SupplyPoint(Base):
+    __tablename__ = "supply_points"
+    __table_args__ = (UniqueConstraint("property_id", "fuel", "identifier_hash", name="uq_supply_point_property_fuel_hash"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    property_id: Mapped[str] = mapped_column(ForeignKey("properties.id", ondelete="CASCADE"), index=True)
+    fuel: Mapped[str] = mapped_column(String(16), nullable=False)
+    identifier_encrypted: Mapped[str] = mapped_column(String(2048), nullable=False)
+    identifier_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    identifier_last4: Mapped[str] = mapped_column(String(4), nullable=False)
+    supplier_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="unverified", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ConsentGrant(Base):
+    __tablename__ = "consent_grants"
+    __table_args__ = (Index("ix_consent_household_status", "household_id", "status"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    household_id: Mapped[str] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), index=True)
+    property_id: Mapped[str | None] = mapped_column(ForeignKey("properties.id", ondelete="CASCADE"), nullable=True, index=True)
+    provider: Mapped[str] = mapped_column(String(60), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(200), nullable=False)
+    scopes_json: Mapped[str] = mapped_column(String(2000), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="pending", nullable=False)
+    granted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
