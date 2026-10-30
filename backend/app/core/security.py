@@ -18,7 +18,7 @@ def verify_password(password: str, hashed_password: str) -> bool:
     return password_hash.verify(password, hashed_password)
 
 
-def create_access_token(subject: str, token_version: int = 0) -> str:
+def create_access_token(subject: str, token_version: int = 0, session_id: str | None = None) -> str:
     settings = get_settings()
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(minutes=settings.access_token_expire_minutes)
@@ -28,6 +28,7 @@ def create_access_token(subject: str, token_version: int = 0) -> str:
         "iat": now,
         "jti": str(uuid4()),
         "ver": token_version,
+        "sid": session_id,
     }
     return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
 
@@ -39,7 +40,7 @@ def decode_access_token_claims(token: str) -> dict | None:
             token,
             settings.secret_key,
             algorithms=[ALGORITHM],
-            options={"require": ["sub", "exp", "iat", "jti", "ver"]},
+            options={"require": ["sub", "exp", "iat", "jti", "ver", "sid"]},
         )
         subject = payload.get("sub")
         token_id = payload.get("jti")
@@ -48,6 +49,8 @@ def decode_access_token_claims(token: str) -> dict | None:
         if not isinstance(token_id, str) or not token_id:
             return None
         if not isinstance(payload.get("ver"), int) or payload["ver"] < 0:
+            return None
+        if not isinstance(payload.get("sid"), str) or not payload["sid"]:
             return None
         return payload
     except jwt.PyJWTError:
