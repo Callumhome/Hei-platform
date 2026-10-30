@@ -1,54 +1,47 @@
 # HEI roadmap
 
-## Phase 0 — Foundation
-- [x] Establish FastAPI service and project structure
-- [x] Add Docker Compose development environment
-- [x] Define supplier adapter contract
-- [x] Add Octopus provider placeholder
-- [x] Add initial Alembic migration and tenant-aware data model
-- [x] Add CI test execution workflow and verify migration + backend tests pass
+## Stage 0 — Existing application foundation
+- [x] FastAPI, PostgreSQL, Redis, Docker Compose and CI
+- [x] Account lifecycle, email verification and password recovery
+- [x] Household membership and tenant isolation baseline
+- [x] Optional read-only Home Assistant discovery
 
-## Phase 1 — Secure accounts and supplier data
-- [ ] Threat model and privacy review
-- [x] Require expiry and issued-at claims when validating access tokens
-- [x] Return conflict only for genuine duplicate-registration database constraints
-- [x] Authentication and session-management hardening
-- [x] Household creation, membership listing, and tenant isolation baseline
-- [x] Household member roles and permission checks
-- [ ] Invitation acceptance
-- [x] One-time email verification with expiring hashed tokens and SMTP delivery
-- [x] Household authorization on energy account, meter, tariff, and reading endpoints
-- [ ] Secure supplier credential storage and revocation
-- [ ] Octopus account linking with explicit consent
-- [ ] Import tariffs, meter metadata, and historical consumption
-- [ ] Idempotent ingestion and audit trail
-- [x] Redis-backed rate limiting for registration and login
-- [x] Immediate access-token revocation on logout
-- [x] Rotating refresh tokens with hashed database storage and replay detection
-- [x] Account-wide logout with access-token version invalidation
-- [x] Account recovery with hashed one-time password reset tokens
-- [x] Responsive account recovery, registration, email verification and sign-in screens
+## Stage 1 — Cloud energy domain foundation
+- [x] Define public cloud-first product boundary and customer onboarding architecture
+- [x] Add property, meter-point, provider-connection, consent, generic-reading and sync-job models
+- [x] Add additive Alembic migration for cloud energy domain
+- [x] Document personal-data encryption, consent and provider boundaries
+- [ ] Add keyed HMAC/encryption services and key-rotation strategy
+- [ ] Add household-scoped property and meter-point APIs
+- [ ] Add tenant-isolation and sensitive-data handling tests
 
-## Phase 2 — Energy intelligence
-- [x] Bounded, deterministic pagination for electricity readings
-- [x] Timezone-aware tariff and reading interval validation
-- [ ] Half-hourly consumption timeline
-- [ ] Cost calculation with tariff and standing-charge support
-- [ ] Import/export and solar-ready data model
-- [ ] Daily, weekly, and monthly summaries
-- [ ] Data quality and missing-interval detection
+## Stage 2 — Provider and consent framework
+- [ ] Formalise provider capability and connector contracts
+- [ ] Implement provider connection lifecycle and revocation
+- [ ] Implement append-only consent event API
+- [ ] Add durable background sync workers and retry policy
+- [ ] Select and validate a UK authorised smart-meter data access route
 
-## Phase 3 — Client applications
-- [x] Initial responsive authenticated dashboard shell and household setup
-- [ ] Live energy dashboard with consumption and cost calculations
-- [x] Read-only Home Assistant connection with encrypted household token storage and energy sensor discovery
-- [ ] Home Assistant sensor-role selection and live dashboard ingestion
-- [ ] Android application
-- [ ] Notifications and user-configurable insights
+## Stage 3 — First production data connector
+- [ ] Implement Octopus account authorisation and API adapter
+- [ ] Import half-hourly consumption history idempotently
+- [ ] Import tariffs and meter metadata
+- [ ] Add data-quality and sync-status views
 
-## Release principles
-- Privacy and security before supplier account linking.
-- Never assume a single tariff structure or meter configuration.
-- Preserve raw source readings and record transformations.
-- Make calculations reproducible and explainable.
-- Keep provider-specific code behind the provider interface.
+## Stage 4 — Property and meter discovery
+- [ ] Integrate UK postcode/address lookup
+- [ ] Integrate authorised MPAN/MPRN discovery and verification
+- [ ] Add gas and electricity supply support
+- [ ] Complete consent, privacy and deletion workflows
+
+## Stage 5 — Home Assistant cloud integration
+- [ ] HEI cloud account linking flow
+- [ ] Cloud-backed sensor entities and availability
+- [ ] Optional local HA telemetry ingestion
+- [ ] HACS packaging and documentation
+
+## Stage 6 — Energy intelligence and public release
+- [ ] Consumption, cost and tariff calculations
+- [ ] Solar, export, battery and heat-pump data sources
+- [ ] Forecasting and explainable insights
+- [ ] Security/privacy review, operational monitoring and public onboarding

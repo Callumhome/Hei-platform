@@ -180,3 +180,115 @@ class HomeAssistantConnection(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Property(Base):
+    """A household property; address fields are encrypted before persistence."""
+
+    __tablename__ = "properties"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    household_id: Mapped[str] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), index=True)
+    address_encrypted: Mapped[str] = mapped_column(String(8192), nullable=False)
+    postcode_fingerprint: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    country_code: Mapped[str] = mapped_column(String(2), default="GB", nullable=False)
+    address_provider: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    address_provider_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class MeterPoint(Base):
+    """A UK supply point. MPAN/MPRN values are encrypted; fingerprints support matching."""
+
+    __tablename__ = "meter_points"
+    __table_args__ = (
+        UniqueConstraint("identifier_fingerprint", name="uq_meter_point_identifier_fingerprint"),
+        Index("ix_meter_points_property_fuel", "property_id", "fuel"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    property_id: Mapped[str] = mapped_column(ForeignKey("properties.id", ondelete="CASCADE"), index=True)
+    fuel: Mapped[str] = mapped_column(String(16), nullable=False)
+    identifier_encrypted: Mapped[str] = mapped_column(String(8192), nullable=False)
+    identifier_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    meter_serial_encrypted: Mapped[str | None] = mapped_column(String(8192), nullable=True)
+    is_smart_meter: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    data_source: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ProviderConnection(Base):
+    """A household's authorised connection to a supplier or meter-data provider."""
+
+    __tablename__ = "provider_connections"
+    __table_args__ = (
+        UniqueConstraint("household_id", "provider_id", "external_account_ref", name="uq_household_provider_external_account"),
+        Index("ix_provider_connections_household_status", "household_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    household_id: Mapped[str] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), index=True)
+    provider_id: Mapped[str] = mapped_column(String(60), nullable=False)
+    external_account_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="pending", nullable=False)
+    credential_encrypted: Mapped[str | None] = mapped_column(String(16384), nullable=True)
+    last_successful_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ConsentRecord(Base):
+    """Immutable consent/audit event for a provider connection."""
+
+    __tablename__ = "consent_records"
+    __table_args__ = (Index("ix_consent_records_connection_created", "connection_id", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    connection_id: Mapped[str] = mapped_column(ForeignKey("provider_connections.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    purpose: Mapped[str] = mapped_column(String(80), nullable=False)
+    scopes: Mapped[str] = mapped_column(String(1000), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    action: Mapped[str] = mapped_column(String(24), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class EnergyDataReading(Base):
+    """Provider-neutral interval reading; preserves source and measurement semantics."""
+
+    __tablename__ = "energy_data_readings"
+    __table_args__ = (
+        UniqueConstraint("meter_point_id", "measurement", "interval_start", "interval_end", "source_record_ref", name="uq_energy_reading_source_interval"),
+        Index("ix_energy_readings_meter_start", "meter_point_id", "interval_start"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    meter_point_id: Mapped[str] = mapped_column(ForeignKey("meter_points.id", ondelete="CASCADE"), index=True)
+    measurement: Mapped[str] = mapped_column(String(40), nullable=False)
+    direction: Mapped[str] = mapped_column(String(16), default="consumption", nullable=False)
+    value: Mapped[Decimal] = mapped_column(Numeric(16, 6), nullable=False)
+    unit: Mapped[str] = mapped_column(String(12), nullable=False)
+    interval_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    interval_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source_provider: Mapped[str] = mapped_column(String(60), nullable=False)
+    source_record_ref: Mapped[str] = mapped_column(String(200), nullable=False)
+    quality: Mapped[str] = mapped_column(String(24), default="raw", nullable=False)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SyncJob(Base):
+    """Durable record of provider ingestion attempts, without storing secrets or raw payloads."""
+
+    __tablename__ = "sync_jobs"
+    __table_args__ = (Index("ix_sync_jobs_household_created", "household_id", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    household_id: Mapped[str] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), index=True)
+    connection_id: Mapped[str | None] = mapped_column(ForeignKey("provider_connections.id", ondelete="SET NULL"), nullable=True)
+    job_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="queued", nullable=False)
+    records_seen: Mapped[int] = mapped_column(default=0, nullable=False)
+    records_inserted: Mapped[int] = mapped_column(default=0, nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
