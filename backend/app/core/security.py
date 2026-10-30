@@ -27,7 +27,7 @@ def create_access_token(subject: str) -> str:
 def decode_access_token(token: str) -> str | None:
     settings = get_settings()
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+        payload = jwt.decode(\n            token,\n            settings.secret_key,\n            algorithms=[ALGORITHM],\n            options={"require": ["sub", "exp", "iat"]},\n        )
         subject = payload.get("sub")
         return subject if isinstance(subject, str) and subject else None
     except jwt.PyJWTError:

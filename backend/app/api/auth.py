@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError\nfrom sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password

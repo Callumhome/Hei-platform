@@ -10,7 +10,7 @@
 
 ## Phase 1 — Secure accounts and supplier data
 - [ ] Threat model and privacy review
-- [ ] User registration, authentication, and session management hardening
+- [x] Require expiry and issued-at claims when validating access tokens\n- [x] Return conflict only for genuine duplicate-registration database constraints\n- [ ] User registration, authentication, and session management hardening
 - [x] Household creation, membership listing, and tenant isolation baseline
 - [x] Household member roles and permission checks
 - [ ] Invitation acceptance and account email verification
