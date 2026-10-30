@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import configure_mappers
 
 from app.db.base import Base
@@ -22,5 +22,5 @@ def test_models_create_in_sqlite():
     engine = create_engine("sqlite:///:memory:")
     configure_mappers()
     Base.metadata.create_all(engine)
-    assert set(Base.metadata.tables).issubset(set(Base.metadata.tables))
+    assert set(inspect(engine).get_table_names()) == set(Base.metadata.tables)
     engine.dispose()
