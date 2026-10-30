@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./hei_dev.db"
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    email_verification_expire_hours: int = 24
+    frontend_base_url: str = "http://localhost:3000"
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from_email: str | None = None
+    smtp_use_starttls: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
