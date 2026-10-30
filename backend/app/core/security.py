@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 import jwt
 from pwdlib import PasswordHash
@@ -19,21 +20,37 @@ def verify_password(password: str, hashed_password: str) -> bool:
 
 def create_access_token(subject: str) -> str:
     settings = get_settings()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
-    payload = {"sub": subject, "exp": expires_at, "iat": datetime.now(timezone.utc)}
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=settings.access_token_expire_minutes)
+    payload = {
+        "sub": subject,
+        "exp": expires_at,
+        "iat": now,
+        "jti": str(uuid4()),
+    }
     return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
 
 
-def decode_access_token(token: str) -> str | None:
+def decode_access_token_claims(token: str) -> dict | None:
     settings = get_settings()
     try:
         payload = jwt.decode(
             token,
             settings.secret_key,
             algorithms=[ALGORITHM],
-            options={"require": ["sub", "exp", "iat"]},
+            options={"require": ["sub", "exp", "iat", "jti"]},
         )
         subject = payload.get("sub")
-        return subject if isinstance(subject, str) and subject else None
+        token_id = payload.get("jti")
+        if not isinstance(subject, str) or not subject:
+            return None
+        if not isinstance(token_id, str) or not token_id:
+            return None
+        return payload
     except jwt.PyJWTError:
         return None
+
+
+def decode_access_token(token: str) -> str | None:
+    claims = decode_access_token_claims(token)
+    return claims["sub"] if claims else None
