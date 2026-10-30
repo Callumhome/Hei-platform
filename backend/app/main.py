@@ -6,6 +6,7 @@ from app.api.routes import router as api_router
 from app.api.auth import router as auth_router
 from app.api.households import router as households_router
 from app.api.energy import router as energy_router
+from app.api.home_assistant import router as home_assistant_router
 
 settings = get_settings()
 
@@ -19,7 +20,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -33,3 +34,4 @@ app.include_router(api_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(households_router, prefix=settings.api_v1_prefix)
 app.include_router(energy_router, prefix=settings.api_v1_prefix)
+app.include_router(home_assistant_router, prefix=settings.api_v1_prefix)

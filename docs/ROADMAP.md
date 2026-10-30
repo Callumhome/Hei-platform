@@ -41,7 +41,8 @@
 ## Phase 3 — Client applications
 - [x] Initial responsive authenticated dashboard shell and household setup
 - [ ] Live energy dashboard with consumption and cost calculations
-- [ ] Home Assistant integration
+- [x] Read-only Home Assistant connection with encrypted household token storage and energy sensor discovery
+- [ ] Home Assistant sensor-role selection and live dashboard ingestion
 - [ ] Android application
 - [ ] Notifications and user-configurable insights
 

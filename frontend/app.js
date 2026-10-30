@@ -64,12 +64,75 @@
         household = list[0]; tokenStore.setItem("hei_household",household.id);
         $("household-name").textContent = household.name; $("household-copy").textContent = "Your household workspace is ready. Your role is " + household.role + ".";
         $("household-form").hidden = true; $("household-ready").hidden = false; $("household-ready-copy").textContent = household.name + " · " + household.role;
-        $("dashboard-subtitle").textContent = "Showing the workspace for " + household.name + ".";
+        $("dashboard-subtitle").textContent = "Showing the workspace for " + household.name + ".";\n        await loadHomeAssistant();
       } else {
-        household = null; $("household-form").hidden = false; $("household-ready").hidden = true;
+        household = null; $("household-form").hidden = false; $("household-ready").hidden = true; $("ha-panel").hidden = true;
       }
     } catch (e) { if (e.status === 401) signOut(false); else notice("We couldn't load your household workspace. Please refresh to try again.",true,"dashboard-notice"); }
   }
+  async function loadHomeAssistant() {
+    $("ha-panel").hidden = false;
+    try {
+      const status = await api("/api/v1/households/" + household.id + "/home-assistant");
+      if (status.connected) {
+        $("ha-url").value = status.base_url;
+        $("ha-connect-form").hidden = true;
+        $("ha-connected").hidden = false;
+        $("ha-status").textContent = "CONNECTED";
+        await refreshHomeAssistantEntities();
+      } else {
+        $("ha-connect-form").hidden = false;
+        $("ha-connected").hidden = true;
+        $("ha-status").textContent = "NOT CONNECTED";
+      }
+    } catch (_) { $("ha-status").textContent = "CHECK CONNECTION"; }
+  }
+  async function refreshHomeAssistantEntities() {
+    $("ha-entities").textContent = "Loading energy sensors…";
+    try {
+      const data = await api("/api/v1/households/" + household.id + "/home-assistant/entities");
+      $("ha-summary").textContent = data.entities.length + " energy-related sensors discovered. Choose the readings to use in a later setup step.";
+      $("ha-entities").replaceChildren();
+      data.entities.forEach(entity => {
+        const row = document.createElement("div"); row.className = "ha-entity";
+        const left = document.createElement("div"); const name = document.createElement("strong"); name.textContent = entity.name;
+        const id = document.createElement("small"); id.textContent = entity.entity_id; left.append(name,id);
+        const value = document.createElement("span"); value.textContent = entity.state + (entity.unit ? " " + entity.unit : "");
+        row.append(left,value); $("ha-entities").append(row);
+      });
+    } catch (_) { $("ha-entities").textContent = "Couldn't retrieve sensors. Try refreshing."; }
+  }
+  $("ha-connect-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const button = $("ha-connect-button"); busy(button,true,"Connect Home Assistant →");
+    const token = $("ha-token").value;
+    try {
+      const result = await api("/api/v1/households/" + household.id + "/home-assistant", {
+        method:"POST", body:JSON.stringify({base_url:$("ha-url").value.trim(),token})
+      }, false);
+      $("ha-token").value = "";
+      $("ha-connect-form").hidden = true; $("ha-connected").hidden = false;
+      $("ha-status").textContent = "CONNECTED";
+      $("ha-summary").textContent = result.entity_count + " energy-related sensors discovered.";
+      $("ha-entities").replaceChildren();
+      result.entities.forEach(entity => {
+        const row=document.createElement("div");row.className="ha-entity";
+        const left=document.createElement("div");const name=document.createElement("strong");name.textContent=entity.name;
+        const id=document.createElement("small");id.textContent=entity.entity_id;left.append(name,id);
+        const value=document.createElement("span");value.textContent=entity.state+(entity.unit?" "+entity.unit:"");row.append(left,value);$("ha-entities").append(row);
+      });
+    } catch(err) {
+      $("ha-notice").textContent = err.message || "Home Assistant connection failed.";
+      $("ha-notice").classList.add("error"); $("ha-notice").hidden = false;
+    } finally { busy(button,false,"Connect Home Assistant →"); }
+  });
+  $("ha-refresh").addEventListener("click",refreshHomeAssistantEntities);
+  $("ha-disconnect").addEventListener("click",async()=>{
+    if(!confirm("Disconnect Home Assistant from this household?"))return;
+    try { await api("/api/v1/households/"+household.id+"/home-assistant",{method:"DELETE"}); $("ha-connected").hidden=true;$("ha-connect-form").hidden=false;$("ha-token").value="";$("ha-status").textContent="NOT CONNECTED"; }
+    catch(_) { $("ha-notice").textContent="Couldn't disconnect Home Assistant."; $("ha-notice").hidden=false; }
+  });
+
   function signOut(callApi = true) {
     if (callApi && tokenStore.getItem("hei_access")) api("/api/v1/auth/logout",{method:"POST"}).catch(()=>{});
     clearSession(); $("dashboard-view").hidden = true; $("top-actions").hidden = true; $("auth-view").hidden = false; setMode("login");
