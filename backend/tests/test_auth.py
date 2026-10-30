@@ -184,3 +184,75 @@ def test_logout_revokes_the_current_access_token_immediately():
 
 def test_logout_requires_authentication():
     assert client.post("/api/v1/auth/logout").status_code == 401
+
+
+
+def test_refresh_token_rotates_once_and_old_token_is_rejected():
+    registration = client.post(
+        "/api/v1/auth/register",
+        json={"email": "rotate@example.com", "password": "a-very-long-test-password"},
+    )
+    assert registration.status_code == 201
+    original = registration.json()
+    rotated = client.post("/api/v1/auth/refresh", json={"refresh_token": original["refresh_token"]})
+    assert rotated.status_code == 200
+    replacement = rotated.json()
+    assert replacement["refresh_token"] != original["refresh_token"]
+    assert client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {original['access_token']}"},
+    ).status_code == 401
+    assert client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": original["refresh_token"]},
+    ).status_code == 401
+    assert client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {replacement['access_token']}"},
+    ).status_code == 200
+
+
+def test_reuse_of_rotated_refresh_token_revokes_all_account_sessions():
+    first = client.post(
+        "/api/v1/auth/register",
+        json={"email": "reuse@example.com", "password": "a-very-long-test-password"},
+    ).json()
+    second = client.post(
+        "/api/v1/auth/login",
+        json={"email": "reuse@example.com", "password": "a-very-long-test-password"},
+    ).json()
+    rotated = client.post("/api/v1/auth/refresh", json={"refresh_token": first["refresh_token"]})
+    assert rotated.status_code == 200
+
+    replay = client.post("/api/v1/auth/refresh", json={"refresh_token": first["refresh_token"]})
+    assert replay.status_code == 401
+    for token in (second["access_token"], rotated.json()["access_token"]):
+        assert client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        ).status_code == 401
+
+
+def test_logout_all_invalidates_access_and_refresh_tokens():
+    first = client.post(
+        "/api/v1/auth/register",
+        json={"email": "logout-all@example.com", "password": "a-very-long-test-password"},
+    ).json()
+    second = client.post(
+        "/api/v1/auth/login",
+        json={"email": "logout-all@example.com", "password": "a-very-long-test-password"},
+    ).json()
+    response = client.post(
+        "/api/v1/auth/logout-all",
+        headers={"Authorization": f"Bearer {first['access_token']}"},
+    )
+    assert response.status_code == 200
+    for token in (first["access_token"], second["access_token"]):
+        assert client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        ).status_code == 401
+    assert client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": second["refresh_token"]},
+    ).status_code == 401
