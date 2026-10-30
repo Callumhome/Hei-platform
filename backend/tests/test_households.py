@@ -111,11 +111,6 @@ def test_owner_can_change_role_and_admin_cannot_promote_or_demote_roles():
             headers=auth(owner_token),
             json={"email": email, "role": role},
         ).status_code == 201
-    assert client.patch(
-        f"/api/v1/households/{household_id}/members/{member_token and 'unused'}",
-        headers=auth(admin_token),
-        json={"role": "viewer"},
-    ).status_code == 404 or True
     member_id = next(
         item["user_id"] for item in client.get(
             f"/api/v1/households/{household_id}/members", headers=auth(owner_token)
