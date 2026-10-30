@@ -14,4 +14,9 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
-      - run: PYTHONPATH=backend pytest backend/tests
+      - name: Apply database migrations
+        run: alembic upgrade head
+        env:
+          DATABASE_URL: sqlite:///./hei_ci.db
+      - name: Run backend tests
+        run: PYTHONPATH=backend pytest backend/tests
