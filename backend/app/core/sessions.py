@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, status
 from redis.exceptions import RedisError
 
-from app.core.rate_limit import get_redis_client
+from app.core import rate_limit
 
 
 def _revocation_key(token_id: str) -> str:
@@ -12,7 +12,7 @@ def _revocation_key(token_id: str) -> str:
 
 def is_token_revoked(token_id: str) -> bool:
     try:
-        return bool(get_redis_client().exists(_revocation_key(token_id)))
+        return bool(rate_limit.get_redis_client().exists(_revocation_key(token_id)))
     except RedisError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -27,7 +27,7 @@ def revoke_token(token_id: str, expires_at: int) -> None:
     if ttl <= 0:
         return
     try:
-        get_redis_client().set(_revocation_key(token_id), "1", ex=ttl)
+        rate_limit.get_redis_client().set(_revocation_key(token_id), "1", ex=ttl)
     except RedisError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
