@@ -120,3 +120,45 @@ def test_inactive_user_cannot_use_an_existing_access_token():
         db.close()
     response = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
+
+
+
+def test_registration_is_rate_limited_after_five_attempts():
+    for attempt in range(5):
+        response = client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": f"rate-limit-{attempt}@example.com",
+                "password": "a-very-long-test-password",
+            },
+        )
+        assert response.status_code == 201
+
+    limited = client.post(
+        "/api/v1/auth/register",
+        json={"email": "rate-limit-final@example.com", "password": "a-very-long-test-password"},
+    )
+    assert limited.status_code == 429
+    assert int(limited.headers["Retry-After"]) > 0
+
+
+def test_login_is_rate_limited_per_ip_and_account():
+    registration = client.post(
+        "/api/v1/auth/register",
+        json={"email": "login-limit@example.com", "password": "a-very-long-test-password"},
+    )
+    assert registration.status_code == 201
+
+    for _ in range(8):
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "login-limit@example.com", "password": "incorrect-password"},
+        )
+        assert response.status_code == 401
+
+    limited = client.post(
+        "/api/v1/auth/login",
+        json={"email": "login-limit@example.com", "password": "incorrect-password"},
+    )
+    assert limited.status_code == 429
+    assert int(limited.headers["Retry-After"]) > 0
