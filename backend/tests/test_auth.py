@@ -120,4 +120,3 @@ def test_inactive_user_cannot_use_an_existing_access_token():
         db.close()
     response = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
-}
