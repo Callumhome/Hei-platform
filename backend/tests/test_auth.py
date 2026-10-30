@@ -162,3 +162,25 @@ def test_login_is_rate_limited_per_ip_and_account():
     )
     assert limited.status_code == 429
     assert int(limited.headers["Retry-After"]) > 0
+
+
+
+def test_logout_revokes_the_current_access_token_immediately():
+    registration = client.post(
+        "/api/v1/auth/register",
+        json={"email": "logout@example.com", "password": "a-very-long-test-password"},
+    )
+    assert registration.status_code == 201
+    token = registration.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    assert client.get("/api/v1/auth/me", headers=headers).status_code == 200
+    logout = client.post("/api/v1/auth/logout", headers=headers)
+    assert logout.status_code == 200
+    assert logout.json()["message"] == "Session ended"
+    assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
+    assert client.post("/api/v1/auth/logout", headers=headers).status_code == 401
+
+
+def test_logout_requires_authentication():
+    assert client.post("/api/v1/auth/logout").status_code == 401
