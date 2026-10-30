@@ -5,8 +5,8 @@
 - [x] Add Docker Compose development environment
 - [x] Define supplier adapter contract
 - [x] Add Octopus provider placeholder
-- [ ] Add database migrations and tenant-aware data model
-- [ ] Add CI test execution
+- [x] Add initial Alembic migration and tenant-aware data model
+- [x] Add CI test execution workflow (run status still to be verified)
 
 ## Phase 1 — Secure accounts and supplier data
 - [ ] Threat model and privacy review
