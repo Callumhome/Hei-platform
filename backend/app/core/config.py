@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     secret_key: str = DEVELOPMENT_SECRET_KEY
     access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 30
     database_url: str = "sqlite:///./hei_dev.db"
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
