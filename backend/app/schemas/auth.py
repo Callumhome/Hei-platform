@@ -22,6 +22,23 @@ class LoginRequest(BaseModel):
         return str(value).strip().casefold()
 
 
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=512)
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).strip().casefold()
+
+
+class RegistrationResponse(BaseModel):
+    message: str
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str = Field(min_length=32, max_length=512)
 
@@ -31,6 +48,7 @@ class UserResponse(BaseModel):
     email: EmailStr
     display_name: str | None
     is_active: bool
+    email_verified: bool
 
 
 class TokenResponse(BaseModel):
