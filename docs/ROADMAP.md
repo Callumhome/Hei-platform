@@ -6,7 +6,7 @@
 - [x] Define supplier adapter contract
 - [x] Add Octopus provider placeholder
 - [x] Add initial Alembic migration and tenant-aware data model
-- [x] Add CI test execution workflow (run status still to be verified)
+- [x] Add CI test execution workflow and verify migration + backend tests pass
 
 ## Phase 1 — Secure accounts and supplier data
 - [ ] Threat model and privacy review
