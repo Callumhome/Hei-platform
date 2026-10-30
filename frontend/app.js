@@ -66,11 +66,92 @@
         $("household-form").hidden = true; $("household-ready").hidden = false; $("household-ready-copy").textContent = household.name + " · " + household.role;
         $("dashboard-subtitle").textContent = "Showing the workspace for " + household.name + ".";
         await loadHomeAssistant();
+        await loadProperties();
       } else {
         household = null; $("household-form").hidden = false; $("household-ready").hidden = true; $("ha-panel").hidden = true;
       }
     } catch (e) { if (e.status === 401) signOut(false); else notice("We couldn't load your household workspace. Please refresh to try again.",true,"dashboard-notice"); }
   }
+  function propertyNotice(message,error=false) {
+    const el=$("properties-notice"); el.textContent=message; el.classList.toggle("error",error); el.hidden=false;
+  }
+  function node(tag,cls,text) { const el=document.createElement(tag); if(cls)el.className=cls; if(text!==undefined)el.textContent=text; return el; }
+  async function loadProperties() {
+    const panel=$("properties-panel"); panel.hidden=false;
+    try {
+      const items=await api("/api/v1/households/"+household.id+"/properties");
+      $("properties-count").textContent=items.length+" PROPERT"+(items.length===1?"Y":"IES");
+      $("properties-list").replaceChildren();
+      $("consent-property").replaceChildren(new Option("Select a property",""));
+      items.forEach(p=>{
+        const opt=new Option([p.address_line_1,p.postcode].filter(Boolean).join(" · "),p.id);
+        $("consent-property").add(opt);
+        const card=node("article","property-card");
+        const heading=node("div","property-card-heading");
+        const title=node("h3",null,p.address_line_1);
+        const address=node("p","muted",[p.address_line_2,p.town,p.county,p.postcode].filter(Boolean).join(", "));
+        heading.append(title,node("span","tag","PROPERTY")); card.append(heading,address);
+        const supplyTitle=node("h4",null,"Supply points"); card.append(supplyTitle);
+        const form=node("form","supply-form");
+        const fuel=node("select"); fuel.setAttribute("aria-label","Fuel type"); fuel.add(new Option("Electricity","electricity")); fuel.add(new Option("Gas","gas"));
+        const identifier=node("input"); identifier.placeholder="MPAN (13/21 digits) or MPRN"; identifier.autocomplete="off"; identifier.required=true; identifier.maxLength=21; identifier.inputMode="numeric"; identifier.setAttribute("aria-label","Supply point identifier");
+        const supplier=node("input"); supplier.placeholder="Supplier (optional)"; supplier.maxLength=120; supplier.setAttribute("aria-label","Supplier name");
+        const submit=node("button","button button-secondary","Add supply point"); submit.type="submit";
+        form.append(fuel,identifier,supplier,submit); form.addEventListener("submit",async e=>{
+          e.preventDefault(); submit.disabled=true;
+          try {
+            await api("/api/v1/households/"+household.id+"/properties/"+p.id+"/supply-points",{method:"POST",body:JSON.stringify({fuel:fuel.value,identifier:identifier.value.trim(),supplier_name:supplier.value.trim()||null})});
+            identifier.value=""; supplier.value=""; propertyNotice("Supply point saved. The identifier is encrypted and displayed in masked form."); await loadSupplyPoints(p.id,card);
+          } catch(err) { propertyNotice(err.message||"Could not add this supply point.",true); } finally { submit.disabled=false; }
+        });
+        card.append(form);
+        const points=node("div","supply-points"); points.dataset.propertyId=p.id; card.append(points);
+        $("properties-list").append(card); loadSupplyPoints(p.id,card);
+      });
+      if(!items.length) $("properties-list").append(node("p","muted","No properties yet. Add your first property above."));
+      await loadConsents();
+    } catch(err) { propertyNotice(err.message||"Couldn't load properties.",true); }
+  }
+  async function loadSupplyPoints(propertyId,card) {
+    const host=card.querySelector(".supply-points"); host.replaceChildren(node("p","hint","Loading supply points…"));
+    try {
+      const points=await api("/api/v1/households/"+household.id+"/properties/"+propertyId+"/supply-points");
+      host.replaceChildren();
+      if(!points.length) { host.append(node("p","hint","No supply points registered.")); return; }
+      points.forEach(point=>{const row=node("div","supply-point-row");row.append(node("strong",null,point.fuel==="electricity"?"Electricity":"Gas"),node("span",null,point.identifier_masked),node("span","tag",point.status.toUpperCase()));host.append(row);});
+    } catch(_) { host.replaceChildren(node("p","hint","Couldn't load supply points.")); }
+  }
+  async function loadConsents() {
+    const host=$("consents-list");
+    try {
+      const items=await api("/api/v1/households/"+household.id+"/consents"); host.replaceChildren();
+      if(!items.length) { host.append(node("p","muted","No consent records yet.")); return; }
+      items.forEach(item=>{
+        const row=node("article","consent-row"); const details=node("div");
+        details.append(node("strong",null,item.provider+" · "+item.purpose),node("p","hint","Scopes: "+item.scopes.join(", ")));
+        const actions=node("div","consent-actions"); actions.append(node("span","tag",item.status.toUpperCase()));
+        if(item.status==="pending") { const grant=node("button","button button-secondary","Grant");grant.type="button";grant.addEventListener("click",async()=>{grant.disabled=true;try{await api("/api/v1/households/"+household.id+"/consents/"+item.id+"/grant",{method:"POST"});await loadConsents();propertyNotice("Consent granted.");}catch(err){propertyNotice(err.message||"Could not grant consent.",true);grant.disabled=false;}});actions.append(grant); }
+        if(item.status==="granted") { const revoke=node("button","button button-quiet","Revoke");revoke.type="button";revoke.addEventListener("click",async()=>{if(!confirm("Revoke this consent?"))return;revoke.disabled=true;try{await api("/api/v1/households/"+household.id+"/consents/"+item.id+"/revoke",{method:"POST"});await loadConsents();propertyNotice("Consent revoked.");}catch(err){propertyNotice(err.message||"Could not revoke consent.",true);revoke.disabled=false;}});actions.append(revoke); }
+        row.append(details,actions);host.append(row);
+      });
+    } catch(err) { propertyNotice(err.message||"Couldn't load consent records.",true); }
+  }
+  $("property-form").addEventListener("submit",async e=>{
+    e.preventDefault(); const b=$("property-submit"); b.disabled=true;
+    try {
+      await api("/api/v1/households/"+household.id+"/properties",{method:"POST",body:JSON.stringify({address_line_1:$("property-address1").value.trim(),address_line_2:$("property-address2").value.trim()||null,town:$("property-town").value.trim(),county:$("property-county").value.trim()||null,postcode:$("property-postcode").value.trim(),country_code:"GB"})});
+      $("property-form").reset(); propertyNotice("Property added."); await loadProperties();
+    } catch(err) { propertyNotice(err.message||"Couldn't add property.",true); } finally { b.disabled=false; }
+  });
+  $("consent-form").addEventListener("submit",async e=>{
+    e.preventDefault(); const b=$("consent-submit"); b.disabled=true;
+    try {
+      const scopes=$("consent-scopes").value.split(",").map(s=>s.trim()).filter(Boolean);
+      await api("/api/v1/households/"+household.id+"/consents",{method:"POST",body:JSON.stringify({property_id:$("consent-property").value||null,provider:$("consent-provider").value.trim(),purpose:$("consent-purpose").value.trim(),scopes})});
+      $("consent-form").reset(); propertyNotice("Pending consent record created. Review it below and explicitly grant it when ready."); await loadConsents();
+    } catch(err) { propertyNotice(err.message||"Couldn't create consent.",true); } finally { b.disabled=false; }
+  });
+
   async function loadHomeAssistant() {
     $("ha-panel").hidden = false;
     try {
