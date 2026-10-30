@@ -7,6 +7,9 @@ from app.db.base import Base
 from app.db import models  # noqa: F401
 from app.db.session import get_db
 from app.main import app
+from app.api import auth as auth_api
+
+sent_tokens = {}
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -27,14 +30,19 @@ client = TestClient(app)
 
 def setup_function():
     app.dependency_overrides[get_db] = override_get_db
+    sent_tokens.clear()
+    auth_api.send_verification_email = lambda email, token: sent_tokens.__setitem__(email, token)
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
 
 def register_and_get_token(email: str) -> str:
     response = client.post("/api/v1/auth/register", json={"email": email, "password": "a-very-long-test-password"})
-    assert response.status_code == 201
-    return response.json()["access_token"]
+    assert response.status_code == 202
+    assert client.post("/api/v1/auth/verify-email", json={"token": sent_tokens[email]}).status_code == 200
+    login = client.post("/api/v1/auth/login", json={"email": email, "password": "a-very-long-test-password"})
+    assert login.status_code == 200
+    return login.json()["access_token"]
 
 
 def auth(token: str) -> dict[str, str]:
