@@ -64,7 +64,8 @@
         household = list[0]; tokenStore.setItem("hei_household",household.id);
         $("household-name").textContent = household.name; $("household-copy").textContent = "Your household workspace is ready. Your role is " + household.role + ".";
         $("household-form").hidden = true; $("household-ready").hidden = false; $("household-ready-copy").textContent = household.name + " · " + household.role;
-        $("dashboard-subtitle").textContent = "Showing the workspace for " + household.name + ".";\n        await loadHomeAssistant();
+        $("dashboard-subtitle").textContent = "Showing the workspace for " + household.name + ".";
+        await loadHomeAssistant();
       } else {
         household = null; $("household-form").hidden = false; $("household-ready").hidden = true; $("ha-panel").hidden = true;
       }
