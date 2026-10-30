@@ -1,11 +1,16 @@
-import jwt\nfrom datetime import datetime, timedelta, timezone\n\nfrom fastapi.testclient import TestClient
+import jwt
+from datetime import datetime, timedelta, timezone
+
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.db import models  # noqa: F401
-from app.core.config import get_settings\nfrom app.core.security import decode_access_token\nfrom app.db.session import get_db
+from app.core.config import get_settings
+from app.core.security import decode_access_token
+from app.db.session import get_db
 from app.main import app
 
 engine = create_engine(
