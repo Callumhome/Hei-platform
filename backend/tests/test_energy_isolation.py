@@ -173,3 +173,86 @@ def test_duplicate_account_and_reading_intervals_are_rejected():
     payload = {"provider": "octopus", "provider_account_ref": "acc-1"}
     assert client.post(path, headers=headers(owner), json=payload).status_code == 201
     assert client.post(path, headers=headers(owner), json=payload).status_code == 409
+
+
+def test_duplicate_meter_is_rejected_with_conflict():
+    owner = register("meter-owner@example.com")
+    home_id = household(owner, "Meter test home")
+    account = client.post(
+        f"/api/v1/households/{home_id}/energy-accounts",
+        headers=headers(owner),
+        json={"provider": "octopus", "provider_account_ref": "meter-account"},
+    ).json()
+    path = f"/api/v1/households/{home_id}/energy-accounts/{account['id']}/meters"
+    payload = {"provider_meter_ref": "same-meter-ref"}
+    assert client.post(path, headers=headers(owner), json=payload).status_code == 201
+    duplicate = client.post(path, headers=headers(owner), json=payload)
+    assert duplicate.status_code == 409
+
+
+def test_readings_support_bounded_pagination():
+    owner = register("pagination-owner@example.com")
+    home_id = household(owner, "Pagination home")
+    account = client.post(
+        f"/api/v1/households/{home_id}/energy-accounts",
+        headers=headers(owner),
+        json={"provider": "octopus", "provider_account_ref": "pagination-account"},
+    ).json()
+    meter = client.post(
+        f"/api/v1/households/{home_id}/energy-accounts/{account['id']}/meters",
+        headers=headers(owner),
+        json={"provider_meter_ref": "pagination-meter"},
+    ).json()
+    path = f"/api/v1/households/{home_id}/energy-accounts/{account['id']}/meters/{meter['id']}/readings"
+    for day in (1, 2, 3):
+        response = client.post(
+            path,
+            headers=headers(owner),
+            json={
+                "interval_start": f"2026-10-0{day}T00:00:00Z",
+                "interval_end": f"2026-10-0{day}T00:30:00Z",
+                "consumption_kwh": "0.100",
+            },
+        )
+        assert response.status_code == 201
+    assert len(client.get(path, headers=headers(owner)).json()) == 3
+    first_page = client.get(path + "?limit=2&offset=0", headers=headers(owner))
+    second_page = client.get(path + "?limit=2&offset=2", headers=headers(owner))
+    assert first_page.status_code == 200
+    assert len(first_page.json()) == 2
+    assert len(second_page.json()) == 1
+    assert first_page.json()[0]["interval_start"] < first_page.json()[1]["interval_start"]
+    assert client.get(path + "?limit=501", headers=headers(owner)).status_code == 422
+    assert client.get(path + "?offset=-1", headers=headers(owner)).status_code == 422
+
+
+def test_tariffs_and_readings_reject_timezone_naive_timestamps():
+    owner = register("timezone-owner@example.com")
+    home_id = household(owner, "Timezone home")
+    account = client.post(
+        f"/api/v1/households/{home_id}/energy-accounts",
+        headers=headers(owner),
+        json={"provider": "octopus", "provider_account_ref": "timezone-account"},
+    ).json()
+    meter = client.post(
+        f"/api/v1/households/{home_id}/energy-accounts/{account['id']}/meters",
+        headers=headers(owner),
+        json={"provider_meter_ref": "timezone-meter"},
+    ).json()
+    base = f"/api/v1/households/{home_id}/energy-accounts/{account['id']}/meters/{meter['id']}"
+    tariff = client.post(
+        base + "/tariffs",
+        headers=headers(owner),
+        json={"valid_from": "2026-10-30T00:00:00"},
+    )
+    reading = client.post(
+        base + "/readings",
+        headers=headers(owner),
+        json={
+            "interval_start": "2026-10-30T00:00:00",
+            "interval_end": "2026-10-30T00:30:00",
+            "consumption_kwh": "0.1",
+        },
+    )
+    assert tariff.status_code == 422
+    assert reading.status_code == 422

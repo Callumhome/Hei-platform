@@ -10,17 +10,21 @@
 
 ## Phase 1 — Secure accounts and supplier data
 - [ ] Threat model and privacy review
-- [ ] User registration, authentication, and session management
+- [ ] User registration, authentication, and session management hardening
 - [x] Household creation, membership listing, and tenant isolation baseline
 - [x] Household member roles and permission checks
 - [ ] Invitation acceptance and account email verification
-- [ ] Apply household authorization to every energy account, meter, tariff, and reading endpoint
+- [x] Household authorization on energy account, meter, tariff, and reading endpoints (baseline)
 - [ ] Secure supplier credential storage and revocation
 - [ ] Octopus account linking with explicit consent
 - [ ] Import tariffs, meter metadata, and historical consumption
 - [ ] Idempotent ingestion and audit trail
+- [ ] Rate limiting and abuse protection
+- [ ] Refresh-token/session revocation and account recovery
 
 ## Phase 2 — Energy intelligence
+- [x] Bounded, deterministic pagination for electricity readings
+- [x] Timezone-aware tariff and reading interval validation
 - [ ] Half-hourly consumption timeline
 - [ ] Cost calculation with tariff and standing-charge support
 - [ ] Import/export and solar-ready data model

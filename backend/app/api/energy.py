@@ -1,28 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
-from app.db.models import (
-    ElectricityReading,
-    EnergyAccount,
-    Household,
-    HouseholdMembership,
-    Meter,
-    Tariff,
-    User,
-)
+from app.db.models import ElectricityReading, EnergyAccount, HouseholdMembership, Meter, Tariff, User
 from app.db.session import get_db
 from app.schemas.energy import (
-    ElectricityReadingCreate,
-    ElectricityReadingResponse,
-    EnergyAccountCreate,
-    EnergyAccountResponse,
-    MeterCreate,
-    MeterResponse,
-    TariffCreate,
-    TariffResponse,
+    ElectricityReadingCreate, ElectricityReadingResponse, EnergyAccountCreate,
+    EnergyAccountResponse, MeterCreate, MeterResponse, TariffCreate, TariffResponse,
 )
 
 router = APIRouter(prefix="/households/{household_id}/energy-accounts", tags=["household energy"])
@@ -47,8 +33,7 @@ def _manager(household_id: str, user: User, db: Session) -> HouseholdMembership:
 
 def _account(household_id: str, account_id: str, db: Session) -> EnergyAccount:
     account = db.scalar(select(EnergyAccount).where(
-        EnergyAccount.id == account_id,
-        EnergyAccount.household_id == household_id,
+        EnergyAccount.id == account_id, EnergyAccount.household_id == household_id,
     ))
     if account is None:
         raise HTTPException(status_code=404, detail="Energy account not found")
@@ -57,8 +42,7 @@ def _account(household_id: str, account_id: str, db: Session) -> EnergyAccount:
 
 def _meter(household_id: str, meter_id: str, db: Session) -> Meter:
     meter = db.scalar(
-        select(Meter)
-        .join(EnergyAccount, Meter.energy_account_id == EnergyAccount.id)
+        select(Meter).join(EnergyAccount, Meter.energy_account_id == EnergyAccount.id)
         .where(Meter.id == meter_id, EnergyAccount.household_id == household_id)
     )
     if meter is None:
@@ -119,7 +103,11 @@ def create_tariff(household_id: str, account_id: str, meter_id: str, payload: Ta
         raise HTTPException(status_code=404, detail="Meter not found on this account")
     tariff = Tariff(meter_id=meter.id, **payload.model_dump())
     db.add(tariff)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This tariff conflicts with an existing database constraint")
     db.refresh(tariff)
     return tariff
 
@@ -153,12 +141,25 @@ def create_reading(household_id: str, account_id: str, meter_id: str, payload: E
 
 
 @router.get("/{account_id}/meters/{meter_id}/readings", response_model=list[ElectricityReadingResponse])
-def list_readings(household_id: str, account_id: str, meter_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_readings(
+    household_id: str,
+    account_id: str,
+    meter_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     _membership(household_id, user.id, db)
     account = _account(household_id, account_id, db)
     meter = _meter(household_id, meter_id, db)
     if meter.energy_account_id != account.id:
         raise HTTPException(status_code=404, detail="Meter not found on this account")
-    return db.scalars(select(ElectricityReading).where(
-        ElectricityReading.meter_id == meter.id
-    ).order_by(ElectricityReading.interval_start)).all()
+    statement = (
+        select(ElectricityReading)
+        .where(ElectricityReading.meter_id == meter.id)
+        .order_by(ElectricityReading.interval_start, ElectricityReading.id)
+        .offset(offset)
+        .limit(limit)
+    )
+    return db.scalars(statement).all()

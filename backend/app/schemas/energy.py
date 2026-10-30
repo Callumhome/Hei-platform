@@ -5,6 +5,11 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 
+def _require_timezone(value: datetime, field_name: str) -> None:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{field_name} must include a timezone")
+
+
 class EnergyAccountCreate(BaseModel):
     provider: str = Field(min_length=2, max_length=40, pattern=r"^[a-z0-9_-]+$")
     provider_account_ref: str = Field(min_length=1, max_length=160)
@@ -47,8 +52,11 @@ class TariffCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_validity(self):
-        if self.valid_to is not None and self.valid_to <= self.valid_from:
-            raise ValueError("valid_to must be later than valid_from")
+        _require_timezone(self.valid_from, "valid_from")
+        if self.valid_to is not None:
+            _require_timezone(self.valid_to, "valid_to")
+            if self.valid_to <= self.valid_from:
+                raise ValueError("valid_to must be later than valid_from")
         return self
 
 
@@ -73,6 +81,8 @@ class ElectricityReadingCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_interval(self):
+        _require_timezone(self.interval_start, "interval_start")
+        _require_timezone(self.interval_end, "interval_end")
         if self.interval_end <= self.interval_start:
             raise ValueError("interval_end must be later than interval_start")
         return self
