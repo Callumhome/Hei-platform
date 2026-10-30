@@ -20,7 +20,7 @@
 - [ ] Octopus account linking with explicit consent
 - [ ] Import tariffs, meter metadata, and historical consumption
 - [ ] Idempotent ingestion and audit trail
-- [ ] Rate limiting and abuse protection
+- [x] Redis-backed rate limiting for registration and login (initial fixed-window controls)
 - [ ] Refresh-token/session revocation and account recovery
 
 ## Phase 2 — Energy intelligence
