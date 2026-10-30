@@ -11,7 +11,8 @@
 ## Phase 1 — Secure accounts and supplier data
 - [ ] Threat model and privacy review
 - [x] Require expiry and issued-at claims when validating access tokens
-- [x] Return conflict only for genuine duplicate-registration database constraints\n- [ ] User registration, authentication, and session management hardening
+- [x] Return conflict only for genuine duplicate-registration database constraints
+- [ ] User registration, authentication, and session management hardening
 - [x] Household creation, membership listing, and tenant isolation baseline
 - [x] Household member roles and permission checks
 - [ ] Invitation acceptance
@@ -25,7 +26,7 @@
 - [x] Immediate access-token revocation on logout using Redis denylisting
 - [x] Rotating refresh tokens with hashed database storage and replay detection
 - [x] Account-wide logout with access-token version invalidation
-- [ ] Account recovery
+- [x] Account recovery with hashed one-time password reset tokens and session invalidation
 
 ## Phase 2 — Energy intelligence
 - [x] Bounded, deterministic pagination for electricity readings

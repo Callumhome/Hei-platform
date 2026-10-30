@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
     email_verification_expire_hours: int = 24
+    password_reset_expire_minutes: int = 30
     frontend_base_url: str = "http://localhost:3000"
     smtp_host: str | None = None
     smtp_port: int = 587
@@ -35,6 +36,8 @@ class Settings(BaseSettings):
             raise ValueError("SECRET_KEY must contain at least 32 bytes")
         if self.app_env.casefold() == "production" and self.secret_key == DEVELOPMENT_SECRET_KEY:
             raise ValueError("A unique SECRET_KEY must be configured in production")
+        if not 5 <= self.password_reset_expire_minutes <= 120:
+            raise ValueError("PASSWORD_RESET_EXPIRE_MINUTES must be between 5 and 120")
         return self
 
     @property

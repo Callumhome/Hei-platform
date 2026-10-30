@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.email_verification import create_verification_token, send_verification_email, verify_email_token
+from app.core.password_reset import create_password_reset_token, reset_password, send_password_reset_email
 from app.core.security import decode_access_token_claims, hash_password, verify_password
 from app.core.sessions import (
     create_session,
@@ -16,10 +17,12 @@ from app.core.sessions import (
     rotate_refresh_token,
 )
 from app.core.rate_limit import enforce_rate_limit
-from app.db.models import EmailVerificationToken, RefreshSession, User
+from app.db.models import RefreshSession, User
 from app.db.session import get_db
 from app.schemas.auth import (
     LoginRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
     RefreshRequest,
     RegisterRequest,
     RegistrationResponse,
@@ -143,6 +146,30 @@ def resend_verification(
         token = create_verification_token(db, user)
         send_verification_email(user.email, token)
     return RegistrationResponse(message="If the account needs verification, an email will be sent shortly.")
+
+
+@router.post("/forgot-password", response_model=RegistrationResponse, status_code=status.HTTP_202_ACCEPTED)
+def forgot_password(
+    payload: PasswordResetRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RegistrationResponse:
+    enforce_rate_limit(request, action="password-reset-ip", identifier="all", limit=20, window_seconds=3600)
+    enforce_rate_limit(request, action="password-reset-account", identifier=payload.email, limit=3, window_seconds=3600)
+    user = db.scalar(select(User).where(User.email == payload.email))
+    if user is not None and user.is_active and user.email_verified:
+        token = create_password_reset_token(db, user)
+        send_password_reset_email(user.email, token)
+    return RegistrationResponse(message="If an active verified account exists, password reset instructions will be sent shortly.")
+
+
+@router.post("/reset-password", response_model=RegistrationResponse)
+def confirm_password_reset(
+    payload: PasswordResetConfirmRequest,
+    db: Session = Depends(get_db),
+) -> RegistrationResponse:
+    reset_password(db, payload.token, payload.new_password)
+    return RegistrationResponse(message="Password updated. Please sign in again on your devices.")
 
 
 @router.post("/login", response_model=TokenResponse)

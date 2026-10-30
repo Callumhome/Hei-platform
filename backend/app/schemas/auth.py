@@ -35,6 +35,20 @@ class ResendVerificationRequest(BaseModel):
         return str(value).strip().casefold()
 
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).strip().casefold()
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=512)
+    new_password: str = Field(min_length=12, max_length=128)
+
+
 class RegistrationResponse(BaseModel):
     message: str
 

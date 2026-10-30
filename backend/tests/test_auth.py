@@ -16,6 +16,7 @@ from app.db.session import get_db
 from app.main import app
 
 sent_tokens = {}
+sent_reset_tokens = {}
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base.metadata.create_all(engine)
@@ -36,7 +37,9 @@ client = TestClient(app)
 def setup_function():
     app.dependency_overrides[get_db] = override_get_db
     sent_tokens.clear()
+    sent_reset_tokens.clear()
     auth_api.send_verification_email = lambda email, token: sent_tokens.__setitem__(email, token)
+    auth_api.send_password_reset_email = lambda email, token: sent_reset_tokens.__setitem__(email, token)
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
@@ -135,3 +138,77 @@ def test_logout_all_invalidates_every_device():
     for token in (one["access_token"], two["access_token"]):
         assert client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401
     assert client.post("/api/v1/auth/refresh", json={"refresh_token": two["refresh_token"]}).status_code == 401
+
+
+def test_password_reset_is_one_time_and_revokes_all_existing_sessions():
+    register("recover@example.com")
+    first = login("recover@example.com").json()
+    second = login("recover@example.com").json()
+
+    requested = client.post("/api/v1/auth/forgot-password", json={"email": "recover@example.com"})
+    assert requested.status_code == 202
+    reset_token = sent_reset_tokens["recover@example.com"]
+
+    completed = client.post(
+        "/api/v1/auth/reset-password",
+        json={"token": reset_token, "new_password": "a-different-long-password"},
+    )
+    assert completed.status_code == 200
+    assert client.post(
+        "/api/v1/auth/reset-password",
+        json={"token": reset_token, "new_password": "another-long-password"},
+    ).status_code == 400
+
+    assert login("recover@example.com", "a-very-long-test-password").status_code == 401
+    assert login("recover@example.com", "a-different-long-password").status_code == 200
+    for access_token in (first["access_token"], second["access_token"]):
+        assert client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        ).status_code == 401
+    assert client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": first["refresh_token"]},
+    ).status_code == 401
+
+
+def test_password_reset_request_does_not_disclose_unknown_accounts():
+    register("known-reset@example.com")
+    known = client.post("/api/v1/auth/forgot-password", json={"email": "known-reset@example.com"})
+    unknown = client.post("/api/v1/auth/forgot-password", json={"email": "missing-reset@example.com"})
+    assert known.status_code == unknown.status_code == 202
+    assert known.json() == unknown.json()
+    assert "missing-reset@example.com" not in sent_reset_tokens
+
+
+def test_password_reset_rejects_expired_tokens():
+    register("expired-reset@example.com")
+    client.post("/api/v1/auth/forgot-password", json={"email": "expired-reset@example.com"})
+    token = sent_reset_tokens["expired-reset@example.com"]
+
+    db = TestingSessionLocal()
+    from app.db.models import PasswordResetToken
+    record = db.query(PasswordResetToken).one()
+    record.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    db.commit()
+    db.close()
+
+    response = client.post(
+        "/api/v1/auth/reset-password",
+        json={"token": token, "new_password": "a-different-long-password"},
+    )
+    assert response.status_code == 400
+    assert login("expired-reset@example.com").status_code == 200
+
+
+def test_password_reset_request_is_rate_limited():
+    register("reset-limit@example.com")
+    for _ in range(3):
+        assert client.post(
+            "/api/v1/auth/forgot-password",
+            json={"email": "reset-limit@example.com"},
+        ).status_code == 202
+    assert client.post(
+        "/api/v1/auth/forgot-password",
+        json={"email": "reset-limit@example.com"},
+    ).status_code == 429
