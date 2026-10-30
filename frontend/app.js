@@ -77,6 +77,7 @@
 
   $("switch-button").addEventListener("click",()=>setMode(currentMode==="login"?"register":"login"));
   $("forgot-link").addEventListener("click",()=>setMode("forgot"));
+  $("verify-link").addEventListener("click",()=>{ $("verify-email").value=$("login-email").value.trim(); setMode("verify"); });
   $("success-action").addEventListener("click",()=>setMode("login"));
   $("logout-button").addEventListener("click",()=>signOut());
   $("login-form").addEventListener("submit",async e=>{
