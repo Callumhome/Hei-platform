@@ -14,7 +14,8 @@
 - [x] Return conflict only for genuine duplicate-registration database constraints\n- [ ] User registration, authentication, and session management hardening
 - [x] Household creation, membership listing, and tenant isolation baseline
 - [x] Household member roles and permission checks
-- [ ] Invitation acceptance and account email verification
+- [ ] Invitation acceptance
+- [x] One-time email verification with expiring hashed tokens and SMTP delivery
 - [x] Household authorization on energy account, meter, tariff, and reading endpoints (baseline)
 - [ ] Secure supplier credential storage and revocation
 - [ ] Octopus account linking with explicit consent
