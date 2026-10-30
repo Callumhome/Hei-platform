@@ -202,6 +202,10 @@ def test_refresh_token_rotates_once_and_old_token_is_rejected():
         "/api/v1/auth/me",
         headers={"Authorization": f"Bearer {original['access_token']}"},
     ).status_code == 401
+    assert client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {replacement['access_token']}"},
+    ).status_code == 200
     assert client.post(
         "/api/v1/auth/refresh",
         json={"refresh_token": original["refresh_token"]},
@@ -209,7 +213,7 @@ def test_refresh_token_rotates_once_and_old_token_is_rejected():
     assert client.get(
         "/api/v1/auth/me",
         headers={"Authorization": f"Bearer {replacement['access_token']}"},
-    ).status_code == 200
+    ).status_code == 401
 
 
 def test_reuse_of_rotated_refresh_token_revokes_all_account_sessions():
