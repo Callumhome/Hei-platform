@@ -35,6 +35,9 @@ client = TestClient(app)
 
 
 def setup_function():
+    # Other test modules also override this app-wide dependency during import.
+    # Reassert this module's isolated database before each auth test.
+    app.dependency_overrides[get_db] = override_get_db
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
@@ -117,3 +120,4 @@ def test_inactive_user_cannot_use_an_existing_access_token():
         db.close()
     response = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 401
+}
