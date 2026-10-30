@@ -11,7 +11,10 @@
 ## Phase 1 — Secure accounts and supplier data
 - [ ] Threat model and privacy review
 - [ ] User registration, authentication, and session management
-- [ ] Tenant isolation and authorization tests
+- [x] Household creation, membership listing, and tenant isolation baseline
+- [x] Household member roles and permission checks
+- [ ] Invitation acceptance and account email verification
+- [ ] Apply household authorization to every energy account, meter, tariff, and reading endpoint
 - [ ] Secure supplier credential storage and revocation
 - [ ] Octopus account linking with explicit consent
 - [ ] Import tariffs, meter metadata, and historical consumption
