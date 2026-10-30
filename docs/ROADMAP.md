@@ -22,7 +22,9 @@
 - [ ] Idempotent ingestion and audit trail
 - [x] Redis-backed rate limiting for registration and login (initial fixed-window controls)
 - [x] Immediate access-token revocation on logout using Redis denylisting
-- [ ] Refresh-token rotation and account recovery
+- [x] Rotating refresh tokens with hashed database storage and replay detection
+- [x] Account-wide logout with access-token version invalidation
+- [ ] Account recovery
 
 ## Phase 2 — Energy intelligence
 - [x] Bounded, deterministic pagination for electricity readings
