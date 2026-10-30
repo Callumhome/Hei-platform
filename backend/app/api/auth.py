@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.email_verification import create_verification_token, send_verification_email, verify_email_token
 from app.core.security import decode_access_token_claims, hash_password, verify_password
 from app.core.sessions import (
     create_session,
@@ -15,9 +16,18 @@ from app.core.sessions import (
     rotate_refresh_token,
 )
 from app.core.rate_limit import enforce_rate_limit
-from app.db.models import RefreshSession, User
+from app.db.models import EmailVerificationToken, RefreshSession, User
 from app.db.session import get_db
-from app.schemas.auth import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UserResponse
+from app.schemas.auth import (
+    LoginRequest,
+    RefreshRequest,
+    RegisterRequest,
+    RegistrationResponse,
+    ResendVerificationRequest,
+    TokenResponse,
+    UserResponse,
+    VerifyEmailRequest,
+)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -47,6 +57,7 @@ def get_current_user(
     if (
         user is None
         or not user.is_active
+        or not user.email_verified
         or user.token_version != claims["ver"]
         or session is None
         or session.revoked_at is not None
@@ -64,16 +75,17 @@ def _token_response(user: User, db: Session) -> TokenResponse:
             email=user.email,
             display_name=user.display_name,
             is_active=user.is_active,
+            email_verified=user.email_verified,
         ),
     )
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=RegistrationResponse, status_code=status.HTTP_202_ACCEPTED)
 def register(
     payload: RegisterRequest,
     request: Request,
     db: Session = Depends(get_db),
-) -> TokenResponse:
+) -> RegistrationResponse:
     enforce_rate_limit(
         request,
         action="register",
@@ -89,6 +101,7 @@ def register(
         email=payload.email,
         display_name=payload.display_name,
         password_hash=hash_password(payload.password),
+        email_verified=False,
     )
     db.add(user)
     try:
@@ -97,7 +110,39 @@ def register(
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Unable to create account with these details")
-    return _token_response(user, db)
+
+    token = create_verification_token(db, user)
+    send_verification_email(user.email, token)
+    return RegistrationResponse(message="Account created. Check your email for a verification link.")
+
+
+@router.post("/verify-email")
+def verify_email(
+    payload: VerifyEmailRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    verify_email_token(db, payload.token)
+    return {"message": "Email address verified. You can now sign in."}
+
+
+@router.post("/resend-verification", response_model=RegistrationResponse, status_code=status.HTTP_202_ACCEPTED)
+def resend_verification(
+    payload: ResendVerificationRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> RegistrationResponse:
+    enforce_rate_limit(
+        request,
+        action="verify-resend",
+        identifier=payload.email,
+        limit=3,
+        window_seconds=3600,
+    )
+    user = db.scalar(select(User).where(User.email == payload.email))
+    if user is not None and user.is_active and not user.email_verified:
+        token = create_verification_token(db, user)
+        send_verification_email(user.email, token)
+    return RegistrationResponse(message="If the account needs verification, an email will be sent shortly.")
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -106,20 +151,8 @@ def login(
     request: Request,
     db: Session = Depends(get_db),
 ) -> TokenResponse:
-    enforce_rate_limit(
-        request,
-        action="login-ip",
-        identifier="all",
-        limit=30,
-        window_seconds=900,
-    )
-    enforce_rate_limit(
-        request,
-        action="login-account",
-        identifier=payload.email,
-        limit=8,
-        window_seconds=900,
-    )
+    enforce_rate_limit(request, action="login-ip", identifier="all", limit=30, window_seconds=900)
+    enforce_rate_limit(request, action="login-account", identifier=payload.email, limit=8, window_seconds=900)
     user = db.scalar(select(User).where(User.email == payload.email))
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
@@ -127,15 +160,16 @@ def login(
             detail="Email or password is incorrect",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if not user.email_verified:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Please verify your email address before signing in")
     return _token_response(user, db)
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh_access_token(
-    payload: RefreshRequest,
-    db: Session = Depends(get_db),
-) -> TokenResponse:
+def refresh_access_token(payload: RefreshRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user, credentials = rotate_refresh_token(db, payload.refresh_token)
+    if not user.email_verified:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email verification is required")
     return TokenResponse(
         **credentials,
         user=UserResponse(
@@ -143,6 +177,7 @@ def refresh_access_token(
             email=user.email,
             display_name=user.display_name,
             is_active=user.is_active,
+            email_verified=user.email_verified,
         ),
     )
 
@@ -154,6 +189,7 @@ def read_current_user(user: User = Depends(get_current_user)) -> UserResponse:
         email=user.email,
         display_name=user.display_name,
         is_active=user.is_active,
+        email_verified=user.email_verified,
     )
 
 
@@ -164,18 +200,10 @@ def logout(
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise HTTPException(status_code=401, detail="Invalid or missing authentication credentials")
     claims = decode_access_token_claims(credentials.credentials)
     if claims is None or claims["sub"] != user.id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise HTTPException(status_code=401, detail="Invalid or missing authentication credentials")
     revoke_token(claims["jti"], int(claims["exp"]))
     session = db.scalar(select(RefreshSession).where(RefreshSession.id == claims["sid"]))
     if session is not None and session.revoked_at is None:
