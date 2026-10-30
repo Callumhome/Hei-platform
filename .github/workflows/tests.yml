@@ -20,3 +20,15 @@ jobs:
           DATABASE_URL: sqlite:///./hei_ci.db
       - name: Run backend tests
         run: PYTHONPATH=backend pytest backend/tests
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check frontend JavaScript syntax
+        run: node --check frontend/app.js
+      - name: Verify frontend deployment files
+        run: test -s frontend/index.html && test -s frontend/styles.css && test -s frontend/nginx.conf && test -s frontend/Dockerfile

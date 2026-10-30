@@ -27,6 +27,7 @@
 - [x] Rotating refresh tokens with hashed database storage and replay detection
 - [x] Account-wide logout with access-token version invalidation
 - [x] Account recovery with hashed one-time password reset tokens and session invalidation
+- [x] Responsive forgot-password and reset-password web screens with same-origin API proxy
 
 ## Phase 2 — Energy intelligence
 - [x] Bounded, deterministic pagination for electricity readings
@@ -38,7 +39,7 @@
 - [ ] Data quality and missing-interval detection
 
 ## Phase 3 — Client applications
-- [ ] Responsive web dashboard
+- [ ] Full responsive energy dashboard
 - [ ] Home Assistant integration
 - [ ] Android application
 - [ ] Notifications and user-configurable insights

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101b2d">
+  <meta name="description" content="Home Energy Intelligence account recovery">
+  <title>Account recovery · Home Energy Intelligence</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="page-shell">
+    <header class="brand" aria-label="Home Energy Intelligence">
+      <div class="brand-mark" aria-hidden="true">HEI</div>
+      <div><span class="brand-name">Home Energy</span><span class="brand-subtitle">INTELLIGENCE</span></div>
+    </header>
+
+    <section class="auth-card" aria-labelledby="page-title">
+      <div class="eyebrow">ACCOUNT ACCESS</div>
+      <h1 id="page-title">Reset your password</h1>
+      <p class="intro" id="page-intro">Forgotten your password? Enter the email address on your HEI account and we'll send you a secure reset link.</p>
+
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+      <form id="forgot-form" novalidate>
+        <label for="email">Email address</label>
+        <input id="email" name="email" type="email" autocomplete="email" maxlength="320" placeholder="you@example.com" required>
+        <button id="forgot-submit" type="submit">Send reset link <span aria-hidden="true">→</span></button>
+      </form>
+
+      <form id="reset-form" novalidate hidden>
+        <label for="new-password">New password</label>
+        <input id="new-password" name="new-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="At least 12 characters" required>
+        <label for="confirm-password">Confirm new password</label>
+        <input id="confirm-password" name="confirm-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="Enter it again" required>
+        <p class="hint">Use at least 12 characters. Your other signed-in devices will be signed out after the change.</p>
+        <button id="reset-submit" type="submit">Update password <span aria-hidden="true">→</span></button>
+      </form>
+
+      <div id="success-panel" class="success-panel" hidden>
+        <div class="success-icon" aria-hidden="true">✓</div>
+        <h2 id="success-title">Check your inbox</h2>
+        <p id="success-copy">If an active verified account exists for that address, reset instructions will arrive shortly.</p>
+        <button id="back-to-login" class="secondary-button" type="button">Back to sign in</button>
+      </div>
+
+      <div class="card-footer">
+        <a href="/" id="back-link">← Back to sign in</a>
+        <span>Secure account recovery</span>
+      </div>
+    </section>
+
+    <footer class="page-footer">Your energy data stays yours. <span>·</span> Home Energy Intelligence</footer>
+  </main>
+</body>
+</html>

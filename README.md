@@ -4,30 +4,42 @@ A UK-focused, multi-user energy intelligence platform. The first release focuses
 
 ## Current status
 
-**Foundation / early development.** This repository is a starting point, not a production-ready energy service. The Octopus adapter is intentionally a placeholder until authentication, account linking, tariff retrieval, and consumption ingestion are implemented and tested.
+**Early development.** The API foundation, secure account lifecycle, and first responsive account-recovery frontend are in place. The Octopus adapter remains a placeholder: live supplier linking is deliberately held back until credential storage, consent, and ingestion are ready.
 
-## Planned architecture
+## Architecture
 
 - **API:** FastAPI, Python 3.12
-- **Database:** PostgreSQL with SQLAlchemy
-- **Cache / background work foundation:** Redis
-- **Clients:** web app, Android app, and Home Assistant integration (planned)
+- **Database:** PostgreSQL with SQLAlchemy and Alembic
+- **Rate limiting / revocation:** Redis
+- **Web client:** responsive static web application served by Nginx
 - **Providers:** supplier-neutral interface; Octopus Energy first
-- **Deployment:** Docker Compose for local development
+- **Deployment:** Docker Compose
 
 ## Quick start
 
-1. Copy `.env.example` to `.env` and change the development secrets.
-2. Start services:
+1. Copy `.env.example` to `.env`.
+2. Set a unique `SECRET_KEY` and configure SMTP values. Email verification and password recovery require working SMTP.
+3. Start the services:
 
    ```bash
    docker compose up --build
    ```
 
-3. Open the API docs at http://localhost:8000/docs.
-4. Health check: http://localhost:8000/health.
+4. Open the web client at http://localhost:3000.
+5. Open API documentation at http://localhost:8000/docs.
+6. Health check: http://localhost:8000/health.
 
-The API currently exposes health and basic platform metadata only. No supplier credentials are required or collected by this scaffold.
+The web client is served through Nginx. It proxies `/api/` and `/health` to the API, so browser requests remain same-origin. Password reset links use `FRONTEND_BASE_URL` (default `http://localhost:3000`).
+
+## Account recovery
+
+- The forgot-password form posts to `POST /api/v1/auth/forgot-password`.
+- The reset link opens `/reset-password?token=...`.
+- The new-password form posts to `POST /api/v1/auth/reset-password`.
+- Reset tokens are random, hashed at rest, expire after the configured period, and can only be used once.
+- A successful reset revokes all refresh sessions and invalidates access tokens across devices.
+
+Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, and `SMTP_USE_STARTTLS` in `.env`. Never commit real credentials.
 
 ## Project layout
 
@@ -35,43 +47,42 @@ The API currently exposes health and basic platform metadata only. No supplier c
 backend/
   app/
     api/          # HTTP routes
-    core/         # configuration
+    core/         # configuration, security, email
     db/           # database setup and models
     providers/    # supplier integrations
     schemas/      # API schemas
+  alembic/
   tests/
+frontend/
+  index.html      # account recovery screens
+  app.js          # API interactions
+  styles.css      # responsive UI
+  nginx.conf      # same-origin API proxy
 docs/
 .github/workflows/
 ```
 
 ## Development
 
-Install dependencies and run the API:
+Install backend dependencies and run the API:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
+source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --app-dir backend
 ```
 
-Apply database migrations (using the `DATABASE_URL` from `.env`):
+Run backend tests:
 
 ```bash
-alembic upgrade head
+PYTHONPATH=backend pytest backend/tests
 ```
 
-Create a new migration after changing SQLAlchemy models:
+Check frontend JavaScript syntax:
 
 ```bash
-alembic revision --autogenerate -m "describe schema change"
-alembic upgrade head
-```
-
-Run tests:
-
-```bash
-pytest backend/tests
+node --check frontend/app.js
 ```
 
 ## Security principles
@@ -81,5 +92,6 @@ pytest backend/tests
 - Keep supplier access read-only unless a future feature has a clear, separately reviewed need.
 - Use per-user authorization and tenant isolation for every account, meter, and reading.
 - Do not expose raw supplier responses or personal data in logs.
+- Do not expose whether an email address has an account during password recovery.
 
 See [SECURITY.md](SECURITY.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
