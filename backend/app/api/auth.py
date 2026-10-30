@@ -5,7 +5,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
+from app.core.security import create_access_token, decode_access_token_claims, hash_password, verify_password
+from app.core.sessions import is_token_revoked, revoke_token
 from app.core.rate_limit import enforce_rate_limit
 from app.db.models import User
 from app.db.session import get_db
@@ -26,10 +27,12 @@ def get_current_user(
     )
     if credentials is None:
         raise unauthorized
-    user_id = decode_access_token(credentials.credentials)
-    if user_id is None:
+    claims = decode_access_token_claims(credentials.credentials)
+    if claims is None:
         raise unauthorized
-    user = db.scalar(select(User).where(User.id == user_id))
+    if is_token_revoked(claims["jti"]):
+        raise unauthorized
+    user = db.scalar(select(User).where(User.id == claims["sub"]))
     if user is None or not user.is_active:
         raise unauthorized
     return user
@@ -122,3 +125,26 @@ def read_current_user(user: User = Depends(get_current_user)) -> UserResponse:
         display_name=user.display_name,
         is_active=user.is_active,
     )
+
+
+
+@router.post("/logout")
+def logout(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    claims = decode_access_token_claims(credentials.credentials)
+    if claims is None or claims["sub"] != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    revoke_token(claims["jti"], int(claims["exp"]))
+    return {"message": "Session ended"}
