@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError\nfrom sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
@@ -62,7 +63,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenRe
     try:
         db.commit()
         db.refresh(user)
-    except Exception:
+    except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Unable to create account with these details")
     return _token_response(user)
