@@ -12,22 +12,22 @@
 - [ ] Threat model and privacy review
 - [x] Require expiry and issued-at claims when validating access tokens
 - [x] Return conflict only for genuine duplicate-registration database constraints
-- [ ] User registration, authentication, and session management hardening
+- [x] Authentication and session-management hardening
 - [x] Household creation, membership listing, and tenant isolation baseline
 - [x] Household member roles and permission checks
 - [ ] Invitation acceptance
 - [x] One-time email verification with expiring hashed tokens and SMTP delivery
-- [x] Household authorization on energy account, meter, tariff, and reading endpoints (baseline)
+- [x] Household authorization on energy account, meter, tariff, and reading endpoints
 - [ ] Secure supplier credential storage and revocation
 - [ ] Octopus account linking with explicit consent
 - [ ] Import tariffs, meter metadata, and historical consumption
 - [ ] Idempotent ingestion and audit trail
-- [x] Redis-backed rate limiting for registration and login (initial fixed-window controls)
-- [x] Immediate access-token revocation on logout using Redis denylisting
+- [x] Redis-backed rate limiting for registration and login
+- [x] Immediate access-token revocation on logout
 - [x] Rotating refresh tokens with hashed database storage and replay detection
 - [x] Account-wide logout with access-token version invalidation
-- [x] Account recovery with hashed one-time password reset tokens and session invalidation
-- [x] Responsive forgot-password and reset-password web screens with same-origin API proxy
+- [x] Account recovery with hashed one-time password reset tokens
+- [x] Responsive account recovery, registration, email verification and sign-in screens
 
 ## Phase 2 — Energy intelligence
 - [x] Bounded, deterministic pagination for electricity readings
@@ -39,7 +39,8 @@
 - [ ] Data quality and missing-interval detection
 
 ## Phase 3 — Client applications
-- [ ] Full responsive energy dashboard
+- [x] Initial responsive authenticated dashboard shell and household setup
+- [ ] Live energy dashboard with consumption and cost calculations
 - [ ] Home Assistant integration
 - [ ] Android application
 - [ ] Notifications and user-configurable insights
