@@ -67,7 +67,7 @@ def create_session(db: Session, user: User) -> dict:
     db.add(session)
     db.commit()
     return {
-        "access_token": create_access_token(user.id, user.token_version),
+        "access_token": create_access_token(user.id, user.token_version, session.id),
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "expires_in": settings.access_token_expire_minutes * 60,
@@ -122,7 +122,7 @@ def rotate_refresh_token(db: Session, refresh_token: str) -> tuple[User, dict]:
     db.commit()
 
     response = {
-        "access_token": create_access_token(user.id, user.token_version),
+        "access_token": create_access_token(user.id, user.token_version, next_session.id),
         "refresh_token": next_token,
         "token_type": "bearer",
         "expires_in": settings.access_token_expire_minutes * 60,
