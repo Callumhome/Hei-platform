@@ -21,7 +21,8 @@
 - [ ] Import tariffs, meter metadata, and historical consumption
 - [ ] Idempotent ingestion and audit trail
 - [x] Redis-backed rate limiting for registration and login (initial fixed-window controls)
-- [ ] Refresh-token/session revocation and account recovery
+- [x] Immediate access-token revocation on logout using Redis denylisting
+- [ ] Refresh-token rotation and account recovery
 
 ## Phase 2 — Energy intelligence
 - [x] Bounded, deterministic pagination for electricity readings
