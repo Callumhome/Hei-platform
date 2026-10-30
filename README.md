@@ -55,6 +55,19 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --app-dir backend
 ```
 
+Apply database migrations (using the `DATABASE_URL` from `.env`):
+
+```bash
+alembic upgrade head
+```
+
+Create a new migration after changing SQLAlchemy models:
+
+```bash
+alembic revision --autogenerate -m "describe schema change"
+alembic upgrade head
+```
+
 Run tests:
 
 ```bash
