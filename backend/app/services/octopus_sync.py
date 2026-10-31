@@ -101,9 +101,9 @@ def _safe_provider_detail(response: httpx.Response) -> str:
         detail = None
     if not isinstance(detail, str) or not detail.strip():
         detail = response.reason_phrase or "No provider explanation supplied"
-    detail = re.sub(r"\\s+", " ", detail).strip()
+    detail = re.sub(r"\s+", " ", detail).strip()
     # Do not persist MPANs, meter serials, account numbers, or other long numeric IDs.
-    detail = re.sub(r"\\b\\d{8,}\\b", "[redacted]", detail)
+    detail = re.sub(r"\b\d{8,}\b", "[redacted]", detail)
     return detail[:220]
 
 
