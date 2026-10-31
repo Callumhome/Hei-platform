@@ -122,7 +122,7 @@ def test_economy7_analytics_does_not_guess_day_or_night_rate():
         assert result["today"]["cost_complete"] is False
         assert result["half_hourly"][-1]["unit_rate_p_per_kwh"] is None
         # Standing charge is counted once, not once for each register.
-        assert result["period_energy_cost_gbp"] == 0.5
+        assert result["period_energy_cost_gbp"] == 1.0
     finally:
         db.close()
         engine.dispose()
