@@ -14,6 +14,7 @@ def test_all_household_energy_tables_register():
         "meters",
         "tariffs",
         "electricity_readings",
+        "sync_jobs",
     }
     assert expected.issubset(set(Base.metadata.tables))
 
