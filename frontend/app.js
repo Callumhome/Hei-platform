@@ -215,6 +215,54 @@
     catch(_) { $("ha-notice").textContent="Couldn't disconnect Home Assistant."; $("ha-notice").hidden=false; }
   });
 
+  function setDemoMode(enabled) {
+    const button = $("demo-mode-toggle");
+    const notice = $("demo-mode-notice");
+    const empty = $("chart-empty-copy");
+    const chart = $("demo-chart");
+    button.setAttribute("aria-pressed", String(enabled));
+    button.textContent = enabled ? "■ Exit demo mode" : "▶ Test demo mode";
+    button.classList.toggle("demo-active", enabled);
+    notice.hidden = !enabled;
+    if (enabled) {
+      $("electricity-today-value").innerHTML = '12.8 <small>kWh</small>';
+      $("electricity-today-copy").textContent = "Simulated electricity use today";
+      $("estimated-cost-value").innerHTML = '£3.42 <small>GBP</small>';
+      $("estimated-cost-copy").textContent = "Illustrative cost at 26.7p/kWh";
+      $("live-demand-value").innerHTML = '0.64 <small>kW</small>';
+      $("live-demand-copy").textContent = "Simulated current demand";
+      empty.hidden = true;
+      chart.replaceChildren();
+      const values = Array.from({length:48},(_,i) => {
+        const morning = Math.exp(-Math.pow((i-15)/5,2))*0.62;
+        const evening = Math.exp(-Math.pow((i-38)/6,2))*0.9;
+        const base = 0.12 + 0.06*Math.sin(i*1.7) + 0.04*Math.cos(i*0.63);
+        return Math.max(0.06, Math.min(1, base + morning + evening));
+      });
+      values.forEach((value,i) => {
+        const bar = node("span","demo-bar");
+        bar.style.height = (12 + value*82) + "%";
+        bar.title = String(Math.floor(i/2)).padStart(2,"0") + ":" + (i%2 ? "30" : "00") + " · " + (value*0.27).toFixed(2) + " kWh (simulated)";
+        bar.setAttribute("aria-hidden","true");
+        chart.append(bar);
+      });
+      chart.hidden = false;
+    } else {
+      $("electricity-today-value").innerHTML = '— <small>kWh</small>';
+      $("electricity-today-copy").textContent = "Waiting for meter data";
+      $("estimated-cost-value").innerHTML = '— <small>GBP</small>';
+      $("estimated-cost-copy").textContent = "Tariff data not connected";
+      $("live-demand-value").innerHTML = '— <small>kW</small>';
+      $("live-demand-copy").textContent = "Live readings not connected";
+      chart.replaceChildren();
+      chart.hidden = true;
+      empty.hidden = false;
+    }
+  }
+  $("demo-mode-toggle").addEventListener("click", () => {
+    setDemoMode($("demo-mode-toggle").getAttribute("aria-pressed") !== "true");
+  });
+
   function signOut(callApi = true) {
     if (callApi && tokenStore.getItem("hei_access")) api("/api/v1/auth/logout",{method:"POST"}).catch(()=>{});
     clearSession(); $("dashboard-view").hidden = true; $("top-actions").hidden = true; $("auth-view").hidden = false; setMode("login");
