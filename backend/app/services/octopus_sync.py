@@ -278,6 +278,11 @@ def _rate_value(row: dict) -> Decimal | None:
     return Decimal(str(value)) if value is not None else None
 
 
+def _has_valid_period(valid_from: datetime | None, valid_to: datetime | None) -> bool:
+    """Return whether an agreement describes a non-empty time interval."""
+    return valid_from is not None and (valid_to is None or valid_to > valid_from)
+
+
 def _tariff_rate_endpoints(tariff_code: str) -> dict[str, str]:
     """Return the correct public rate feeds for single- or dual-register tariffs."""
     if tariff_code.startswith("E-2R-"):
@@ -296,7 +301,7 @@ def _upsert_tariffs(
     product_code = _tariff_product_code(tariff_code)
     valid_from = _parse_dt(agreement.get("valid_from"))
     valid_to = _parse_dt(agreement.get("valid_to"))
-    if not tariff_code or not valid_from or not product_code:
+    if not tariff_code or not product_code or not _has_valid_period(valid_from, valid_to):
         return 0
     if tariff_code not in cache:
         prefix = f"products/{quote(product_code, safe='')}/electricity-tariffs/{quote(tariff_code, safe='')}/"
