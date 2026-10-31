@@ -67,7 +67,7 @@ def test_ingestion_is_idempotent_and_keeps_import_export_separate():
     engine, db, household, meter = _database()
     start = datetime(2026, 1, 1, tzinfo=timezone.utc)
     reading = NormalizedReading(start, start + timedelta(minutes=30), Decimal("0.4"), Decimal("0.1"), "actual", "row-1")
-    assert ingest_reading_page(db, meter_id=meter.id, provider="fake", readings=(reading,)) == (1, 0)
+    assert ingest_reading_page(db, meter_id=meter.id, provider="fake", readings=(reading, reading)) == (1, 1)
     db.commit()
     assert ingest_reading_page(db, meter_id=meter.id, provider="fake", readings=(reading,)) == (0, 1)
     stored = db.query(__import__("app.db.models", fromlist=["ElectricityReading"]).ElectricityReading).one()
