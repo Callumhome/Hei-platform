@@ -103,3 +103,19 @@
   .history-range{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
   .range-button{padding:9px 5px;font-size:10px}
 }
+
+
+/* Navigation visibility fix and live Home Assistant telemetry */
+.bottom-nav{display:grid!important;visibility:visible!important;opacity:1!important}
+.live-sensors-panel{margin-top:16px}
+.live-sensor-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:16px}
+.live-sensor-card{min-width:0;padding:16px;border:1px solid #a3bad31b;border-radius:13px;background:linear-gradient(145deg,#172a40,#101e31)}
+.live-sensor-card>span{display:block;color:#8fa4b9;font-size:9px;font-weight:800;letter-spacing:1.1px}
+.live-sensor-card strong{display:block;margin:12px 0 5px;color:#e8f5f3;font-size:clamp(19px,2.5vw,26px);letter-spacing:-.5px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.live-sensor-card small{display:block;color:#8095aa;font-size:10px;line-height:1.45;overflow-wrap:anywhere}
+@media(max-width:760px){
+  .live-sensor-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .live-sensor-card{padding:13px}
+  .live-sensor-card strong{font-size:20px;margin:9px 0 4px}
+  .bottom-nav{bottom:max(12px,env(safe-area-inset-bottom));}
+}
