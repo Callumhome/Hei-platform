@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.base import Base
 from app.db.models import EnergyAccount, Household, Meter
 from app.providers.adapter_registry import clear_registry, get_adapter, register_adapter
-from app.providers.contracts import NormalizedReading, ReadingPage
+from app.providers.contracts import NormalizedReading, NormalizedTariff, ReadingPage
 from app.providers.fake import FakeProvider
 from app.services.ingestion import (
     create_sync_job, ingest_reading_page, mark_sync_failed,
@@ -94,3 +94,16 @@ def test_sync_job_retry_backoff_and_success_lifecycle():
     assert job.cursor == "next-page"
     db.close()
     engine.dispose()
+
+
+
+def test_normalized_tariff_validates_currency_dates_and_non_negative_rates():
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    tariff = NormalizedTariff(start, start + timedelta(days=1), Decimal("24.5"), Decimal("51.2"))
+    tariff.validate()
+    with pytest.raises(ValueError, match="later"):
+        NormalizedTariff(start, start, Decimal("20"), Decimal("50")).validate()
+    with pytest.raises(ValueError, match="non-negative"):
+        NormalizedTariff(start, None, Decimal("-1"), None).validate()
+    with pytest.raises(ValueError, match="GBP"):
+        NormalizedTariff(start, None, Decimal("1"), None, currency="USD").validate()
