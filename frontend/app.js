@@ -227,6 +227,11 @@
   }
   $("octopus-connect-form").addEventListener("submit",async e=>{
     e.preventDefault();
+    if (window.location.protocol !== "https:") {
+      $("octopus-notice").textContent = "For your security, connect Octopus only through the HEI HTTPS address.";
+      $("octopus-notice").classList.add("error"); $("octopus-notice").hidden = false;
+      return;
+    }
     const button=$("octopus-connect-button"); busy(button,true,"Verify and connect Octopus →");
     const account=$("octopus-account").value.trim(), key=$("octopus-api-key").value;
     try {
