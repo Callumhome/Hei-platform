@@ -104,7 +104,20 @@
         <div id="properties-notice" class="notice" role="status" aria-live="polite" hidden></div>
       </section>
       <section id="ha-panel" class="panel ha-panel"><div class="panel-heading"><div><div class="eyebrow">LOCAL INTEGRATION</div><h2>Home Assistant</h2></div><span id="ha-status" class="tag">NOT CONNECTED</span></div><p class="muted">Connect your Home Assistant instance to discover energy and power sensors. HEI uses read-only API access and cannot control devices.</p><form id="ha-connect-form" class="ha-connect-form"><label for="ha-url">Home Assistant address</label><input id="ha-url" type="url" value="http://192.168.1.73:8123" placeholder="http://192.168.1.73:8123" required><label for="ha-token">Long-lived access token</label><input id="ha-token" type="password" autocomplete="off" placeholder="Paste token here" required><p class="hint">The token is sent directly to your HEI server and encrypted before it is stored. It is never saved in this browser or GitHub.</p><button id="ha-connect-button" class="button button-primary" type="submit">Connect Home Assistant →</button></form><div id="ha-connected" hidden><p id="ha-summary" class="muted"></p><div id="ha-entities" class="ha-entities"></div><div class="ha-actions"><button id="ha-refresh" class="button button-secondary" type="button">Refresh sensors</button><button id="ha-disconnect" class="button button-quiet" type="button">Disconnect</button></div></div><div id="ha-notice" class="notice" role="status" aria-live="polite" hidden></div></section>
-      <section class="panel connect-panel"><div><div class="eyebrow">NEXT STEP</div><h2>Bring your electricity data together</h2><p class="muted">Octopus Energy is our first planned supplier connection. Account linking is not enabled yet; we're completing the secure consent and credential-storage work first.</p></div><div class="connect-status"><span class="status-dot"></span> SUPPLIER CONNECTIONS IN DEVELOPMENT</div></section>
+      <section id="octopus-panel" class="panel octopus-panel">
+        <div class="panel-heading"><div><div class="eyebrow">SUPPLIER CONNECTION</div><h2>Connect Octopus Energy</h2></div><span id="octopus-status" class="tag">NOT CONNECTED</span></div>
+        <p class="muted">Enter your Octopus account number and API key to verify your account. Credentials are sent to your HEI server over HTTPS and encrypted before storage. They are never saved in this browser.</p>
+        <form id="octopus-connect-form" class="octopus-form">
+          <label for="octopus-account">Octopus account number</label>
+          <input id="octopus-account" type="text" autocomplete="off" maxlength="80" placeholder="A-12345678" required>
+          <label for="octopus-api-key">Octopus API key</label>
+          <input id="octopus-api-key" type="password" autocomplete="new-password" maxlength="256" placeholder="sk_live_…" required>
+          <p class="hint">Your API key is not displayed again after saving. You can disconnect at any time to clear the stored credentials.</p>
+          <button id="octopus-connect-button" class="button button-primary" type="submit">Verify and connect Octopus →</button>
+        </form>
+        <div id="octopus-connected" class="octopus-connected" hidden><p id="octopus-summary" class="muted"></p><button id="octopus-disconnect" class="button button-quiet" type="button">Disconnect Octopus</button></div>
+        <div id="octopus-notice" class="notice" role="status" aria-live="polite" hidden></div>
+      </section>
       <footer class="dashboard-footer">HEI · Home Energy Intelligence <span>Private by design</span></footer>
     </section>
     <footer class="site-footer">Your energy data stays yours. <span>·</span> Home Energy Intelligence</footer>

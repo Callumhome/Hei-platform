@@ -256,3 +256,18 @@ class SyncJob(Base):
     error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class OctopusConnection(Base):
+    __tablename__ = "octopus_connections"
+    __table_args__ = (UniqueConstraint("household_id", name="uq_octopus_connection_household"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    household_id: Mapped[str] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), index=True)
+    account_number_encrypted: Mapped[str] = mapped_column(String(2048), nullable=False)
+    account_number_last4: Mapped[str] = mapped_column(String(4), nullable=False)
+    account_number_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    api_key_encrypted: Mapped[str] = mapped_column(String(2048), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

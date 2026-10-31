@@ -67,6 +67,7 @@
         $("dashboard-subtitle").textContent = "Showing the workspace for " + household.name + ".";
         await loadHomeAssistant();
         await loadProperties();
+        await loadOctopus();
       } else {
         household = null; $("household-form").hidden = false; $("household-ready").hidden = true; $("ha-panel").hidden = true;
       }
@@ -213,6 +214,43 @@
     if(!confirm("Disconnect Home Assistant from this household?"))return;
     try { await api("/api/v1/households/"+household.id+"/home-assistant",{method:"DELETE"}); $("ha-connected").hidden=true;$("ha-connect-form").hidden=false;$("ha-token").value="";$("ha-status").textContent="NOT CONNECTED"; }
     catch(_) { $("ha-notice").textContent="Couldn't disconnect Home Assistant."; $("ha-notice").hidden=false; }
+  });
+
+  async function loadOctopus() {
+    try {
+      const state=await api("/api/v1/households/"+household.id+"/octopus");
+      $("octopus-connect-form").hidden=state.connected;
+      $("octopus-connected").hidden=!state.connected;
+      $("octopus-status").textContent=state.connected?"CONNECTED":"NOT CONNECTED";
+      if(state.connected) $("octopus-summary").textContent="Octopus account verified · ending "+state.account_last4+". Your API key is stored encrypted on your HEI server.";
+    } catch(_) { $("octopus-status").textContent="CHECK CONNECTION"; }
+  }
+  $("octopus-connect-form").addEventListener("submit",async e=>{
+    e.preventDefault();
+    if (window.location.protocol !== "https:") {
+      $("octopus-notice").textContent = "For your security, connect Octopus only through the HEI HTTPS address.";
+      $("octopus-notice").classList.add("error"); $("octopus-notice").hidden = false;
+      return;
+    }
+    const button=$("octopus-connect-button"); busy(button,true,"Verify and connect Octopus →");
+    const account=$("octopus-account").value.trim(), key=$("octopus-api-key").value;
+    try {
+      const result=await api("/api/v1/households/"+household.id+"/octopus",{method:"POST",body:JSON.stringify({account_number:account,api_key:key})},false);
+      $("octopus-account").value=""; $("octopus-api-key").value="";
+      $("octopus-connect-form").hidden=true; $("octopus-connected").hidden=false;
+      $("octopus-status").textContent="CONNECTED";
+      $("octopus-summary").textContent="Octopus account verified · ending "+result.account_last4+". "+result.property_count+" supplier properties found. Credentials are encrypted on your HEI server.";
+      $("octopus-notice").textContent="Octopus account verified and credentials securely stored. Meter discovery and reading import are the next step.";
+      $("octopus-notice").classList.remove("error"); $("octopus-notice").hidden=false;
+    } catch(err) {
+      $("octopus-notice").textContent=err.message||"Couldn't connect to Octopus. Check your details and granted consent.";
+      $("octopus-notice").classList.add("error"); $("octopus-notice").hidden=false;
+    } finally { busy(button,false,"Verify and connect Octopus →"); }
+  });
+  $("octopus-disconnect").addEventListener("click",async()=>{
+    if(!confirm("Disconnect Octopus and clear the stored API key and account number?"))return;
+    try { await api("/api/v1/households/"+household.id+"/octopus",{method:"DELETE"}); $("octopus-connect-form").hidden=false; $("octopus-connected").hidden=true; $("octopus-status").textContent="NOT CONNECTED"; $("octopus-notice").textContent="Octopus credentials cleared."; $("octopus-notice").classList.remove("error"); $("octopus-notice").hidden=false; }
+    catch(err) { $("octopus-notice").textContent=err.message||"Couldn't disconnect Octopus."; $("octopus-notice").classList.add("error"); $("octopus-notice").hidden=false; }
   });
 
   function setDemoMode(enabled) {
