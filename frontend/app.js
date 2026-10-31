@@ -222,9 +222,75 @@
       $("octopus-connect-form").hidden=state.connected;
       $("octopus-connected").hidden=!state.connected;
       $("octopus-status").textContent=state.connected?"CONNECTED":"NOT CONNECTED";
-      if(state.connected) $("octopus-summary").textContent="Octopus account verified · ending "+state.account_last4+". Your API key is stored encrypted on your HEI server.";
+      if(state.connected) {
+        $("octopus-summary").textContent="Octopus account verified · ending "+state.account_last4+". Credentials are encrypted on your HEI server.";
+        await loadOctopusSync();
+      }
     } catch(_) { $("octopus-status").textContent="CHECK CONNECTION"; }
   }
+  async function loadOctopusSync() {
+    try {
+      const state=await api("/api/v1/households/"+household.id+"/octopus/sync-status");
+      const counts=state.counts||{};
+      let message="Import status: "+String(state.status||"not_started").replaceAll("_"," ");
+      if(state.last_synced_at) message+=" · Last run "+new Date(state.last_synced_at).toLocaleString();
+      if(counts.readings_inserted!==undefined) message+=" · "+counts.readings_inserted.toLocaleString()+" readings imported · "+(counts.readings_existing||0).toLocaleString()+" already present · "+(counts.meters||0)+" meters · "+(counts.tariffs||0)+" tariff periods";
+      if(counts.properties!==undefined) message+=" · "+counts.properties+" properties";
+      if(state.error) message+=" · "+state.error;
+      $("octopus-sync-summary").textContent=message;
+      if(state.status==="succeeded") await loadOctopusAnalytics();
+      if(state.status==="running"||state.status==="queued") {
+        $("octopus-sync-button").disabled=true;
+        $("octopus-sync-button").textContent="Import running…";
+        setTimeout(()=>{ if(household) loadOctopusSync(); },5000);
+      } else {
+        $("octopus-sync-button").disabled=false;
+        $("octopus-sync-button").textContent="Import / update energy data →";
+      }
+    } catch(_) { $("octopus-sync-summary").textContent="Couldn't retrieve the Octopus import status."; }
+  }
+  async function loadOctopusAnalytics() {
+    try {
+      const data=await api("/api/v1/households/"+household.id+"/octopus/analytics?days=30");
+      $("electricity-today-value").innerHTML=data.today.import_kwh.toFixed(2)+' <small>kWh</small>';
+      $("electricity-today-copy").textContent=data.last_7_days_import_kwh.toFixed(2)+" kWh over the last 7 days";
+      $("estimated-cost-value").innerHTML=data.today.cost_complete?("£"+data.today.cost_gbp.toFixed(2)+' <small>GBP</small>'):'— <small>GBP</small>';
+      $("estimated-cost-copy").textContent=data.today.cost_complete?"Today's estimated tariff-aware cost":"Tariff data incomplete for some intervals";
+      $("live-demand-value").innerHTML='— <small>kW</small>';
+      $("live-demand-copy").textContent="Octopus provides half-hourly readings, not live power";
+      const chart=$("demo-chart");const empty=$("chart-empty-copy");
+      chart.replaceChildren();
+      const values=data.half_hourly||[];
+      if(values.length) {
+        const max=Math.max(0.05,...values.map(v=>v.import_kwh||0));
+        values.forEach(point=>{
+          const bar=node("span","demo-bar");
+          bar.style.height=(Math.max(3,(point.import_kwh||0)/max*94))+"%";
+          bar.title=new Date(point.start).toLocaleString()+" · "+(point.import_kwh||0).toFixed(3)+" kWh"+(point.unit_rate_p_per_kwh===null?"":" · "+point.unit_rate_p_per_kwh.toFixed(2)+"p/kWh");
+          bar.setAttribute("aria-hidden","true");chart.append(bar);
+        });
+        empty.hidden=true;chart.hidden=false;
+        chart.setAttribute("aria-label","Actual Octopus half-hourly electricity consumption");
+      } else {
+        chart.hidden=true;empty.hidden=false;
+        $("chart-empty-copy").querySelector("strong").textContent="Waiting for Octopus meter readings";
+        $("chart-empty-copy").querySelector("p").textContent="The historical import will populate this chart when meter data is available.";
+      }
+    } catch(_) {
+      // Keep the existing dashboard state if no Octopus readings have arrived yet.
+    }
+  }
+  $("octopus-sync-button").addEventListener("click",async()=>{
+    const button=$("octopus-sync-button");button.disabled=true;button.textContent="Queueing import…";
+    try {
+      await api("/api/v1/households/"+household.id+"/octopus/sync",{method:"POST"});
+      $("octopus-sync-summary").textContent="Historical import and latest data refresh queued. This may take some time.";
+      setTimeout(()=>{ if(household) loadOctopusSync(); },2000);
+    } catch(err) {
+      $("octopus-sync-summary").textContent=err.message||"Couldn't start the Octopus import.";
+      button.disabled=false;button.textContent="Import / update energy data →";
+    }
+  });
   $("octopus-connect-form").addEventListener("submit",async e=>{
     e.preventDefault();
     if (window.location.protocol !== "https:") {
@@ -240,8 +306,8 @@
       $("octopus-connect-form").hidden=true; $("octopus-connected").hidden=false;
       $("octopus-status").textContent="CONNECTED";
       $("octopus-summary").textContent="Octopus account verified · ending "+result.account_last4+". "+result.property_count+" supplier properties found. Credentials are encrypted on your HEI server.";
-      $("octopus-notice").textContent="Octopus account verified and credentials securely stored. Meter discovery and reading import are the next step.";
-      $("octopus-notice").classList.remove("error"); $("octopus-notice").hidden=false;
+      $("octopus-notice").textContent="Octopus account verified and credentials securely stored. Your historical electricity and tariff import has started.";
+      $("octopus-notice").classList.remove("error"); $("octopus-notice").hidden=false; await loadOctopusSync(); setTimeout(()=>{ if(household) loadOctopusSync(); },2000);
     } catch(err) {
       $("octopus-notice").textContent=err.message||"Couldn't connect to Octopus. Check your details and granted consent.";
       $("octopus-notice").classList.add("error"); $("octopus-notice").hidden=false;
@@ -298,7 +364,9 @@
     }
   }
   $("demo-mode-toggle").addEventListener("click", () => {
-    setDemoMode($("demo-mode-toggle").getAttribute("aria-pressed") !== "true");
+    const enable=$("demo-mode-toggle").getAttribute("aria-pressed") !== "true";
+    setDemoMode(enable);
+    if(!enable && household) loadOctopusAnalytics();
   });
 
   function signOut(callApi = true) {

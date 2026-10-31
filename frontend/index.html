@@ -115,7 +115,7 @@
           <p class="hint">Your API key is not displayed again after saving. You can disconnect at any time to clear the stored credentials.</p>
           <button id="octopus-connect-button" class="button button-primary" type="submit">Verify and connect Octopus →</button>
         </form>
-        <div id="octopus-connected" class="octopus-connected" hidden><p id="octopus-summary" class="muted"></p><button id="octopus-disconnect" class="button button-quiet" type="button">Disconnect Octopus</button></div>
+        <div id="octopus-connected" class="octopus-connected" hidden><p id="octopus-summary" class="muted"></p><div class="octopus-sync"><p id="octopus-sync-summary" class="hint">Historical consumption and tariff import will start automatically after connecting.</p><button id="octopus-sync-button" class="button button-secondary" type="button">Import / update energy data →</button></div><button id="octopus-disconnect" class="button button-quiet" type="button">Disconnect Octopus</button></div>
         <div id="octopus-notice" class="notice" role="status" aria-live="polite" hidden></div>
       </section>
       <footer class="dashboard-footer">HEI · Home Energy Intelligence <span>Private by design</span></footer>

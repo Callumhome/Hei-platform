@@ -49,3 +49,6 @@
 
 /* Octopus supplier connection */
 .octopus-panel{margin-top:16px}.octopus-panel>p{max-width:760px}.octopus-form{display:grid;gap:9px;max-width:560px;margin-top:16px}.octopus-form .button{width:100%}.octopus-connected{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px}.octopus-connected p{margin:0}
+
+/* Octopus import status */
+.octopus-sync{display:grid;gap:10px;width:100%;flex-basis:100%;padding:14px 0;border-top:1px solid rgba(145,167,190,.14)}.octopus-sync p{margin:0;line-height:1.5}.octopus-sync .button{justify-self:start}
