@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.db.base import Base
 from app.db.models import ElectricityReading, EnergyAccount, Household, Meter, Tariff
 from app.services.octopus_sync import (
-    OctopusSyncError, _get_json, _parse_dt, _rate_value,
+    OctopusSyncError, _get_json, _has_valid_period, _parse_dt, _rate_value,
     _tariff_product_code, _tariff_rate_endpoints, octopus_energy_analytics,
 )
 
@@ -161,3 +161,13 @@ def test_octopus_bad_request_reports_safe_endpoint_and_provider_detail():
     assert "Invalid request for meter [redacted]" in str(error)
     assert "1234567890123" not in str(error)
     assert "METER-SERIAL-123" not in str(error)
+
+
+
+def test_empty_or_reversed_octopus_agreement_periods_are_skipped():
+    start = datetime(2024, 10, 10, 23, 0, tzinfo=timezone.utc)
+    assert _has_valid_period(start, start) is False
+    assert _has_valid_period(start, start - timedelta(seconds=1)) is False
+    assert _has_valid_period(start, start + timedelta(seconds=1)) is True
+    assert _has_valid_period(start, None) is True
+    assert _has_valid_period(None, None) is False
