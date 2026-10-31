@@ -95,6 +95,12 @@ def _get_json(client: httpx.Client, url: str, params: dict | None = None) -> dic
                 raise OctopusSyncError("OCTOPUS_ACCESS_DENIED", "Octopus denied access to an account or meter endpoint.", False)
             if response.status_code == 404:
                 raise OctopusSyncError("OCTOPUS_RESOURCE_NOT_FOUND", "An Octopus account, meter or tariff resource was not found.", False)
+            if 400 <= response.status_code < 500:
+                raise OctopusSyncError(
+                    "OCTOPUS_BAD_REQUEST",
+                    f"Octopus rejected a request (HTTP {response.status_code}).",
+                    False,
+                )
             response.raise_for_status()
             payload = response.json()
             if not isinstance(payload, dict):
@@ -242,9 +248,19 @@ def _rate_value(row: dict) -> Decimal | None:
     return Decimal(str(value)) if value is not None else None
 
 
+def _tariff_rate_endpoints(tariff_code: str) -> dict[str, str]:
+    """Return the correct public rate feeds for single- or dual-register tariffs."""
+    if tariff_code.startswith("E-2R-"):
+        return {
+            "day": "day-unit-rates/",
+            "night": "night-unit-rates/",
+        }
+    return {"standard": "standard-unit-rates/"}
+
+
 def _upsert_tariffs(
     db: Session, client: httpx.Client, meter: Meter, agreement: dict,
-    cache: dict[str, tuple[list[dict], list[dict], str | None]],
+    cache: dict[str, tuple[dict[str, list[dict]], list[dict], str | None]],
 ) -> int:
     tariff_code = str(agreement.get("tariff_code") or "").strip()
     product_code = _tariff_product_code(tariff_code)
@@ -259,12 +275,20 @@ def _upsert_tariffs(
             params["period_to"] = _iso(valid_to)
         elif datetime.now(timezone.utc) > valid_from:
             params["period_to"] = _iso(datetime.now(timezone.utc))
+        rate_rows: dict[str, list[dict]] = {}
+        for rate_type, endpoint in _tariff_rate_endpoints(tariff_code).items():
+            try:
+                rate_rows[rate_type] = _rows(client, prefix + endpoint, params)
+            except OctopusSyncError as exc:
+                if exc.code in {"OCTOPUS_RESOURCE_NOT_FOUND", "OCTOPUS_ACCESS_DENIED"}:
+                    rate_rows[rate_type] = []
+                else:
+                    raise
         try:
-            units = _rows(client, prefix + "standard-unit-rates/", params)
             standing = _rows(client, prefix + "standing-charges/", params)
         except OctopusSyncError as exc:
             if exc.code in {"OCTOPUS_RESOURCE_NOT_FOUND", "OCTOPUS_ACCESS_DENIED"}:
-                units, standing = [], []
+                standing = []
             else:
                 raise
         try:
@@ -272,46 +296,50 @@ def _upsert_tariffs(
             product_name = product.get("full_name") or product.get("display_name") or product_code
         except OctopusSyncError:
             product_name = product_code
-        cache[tariff_code] = (units, standing, str(product_name))
-    units, standing, product_name = cache[tariff_code]
+        cache[tariff_code] = (rate_rows, standing, str(product_name))
+    rate_rows, standing, product_name = cache[tariff_code]
     inserted = 0
-    for unit in units:
-        start = _parse_dt(unit.get("valid_from"))
-        end = _parse_dt(unit.get("valid_to"))
-        rate = _rate_value(unit)
-        if not start or rate is None:
-            continue
-        if start < valid_from:
-            start = valid_from
-        if valid_to and (end is None or end > valid_to):
-            end = valid_to
-        charge = None
-        for row in standing:
-            charge_start = _parse_dt(row.get("valid_from"))
-            charge_end = _parse_dt(row.get("valid_to"))
-            if charge_start and charge_start <= start and (charge_end is None or start < charge_end):
-                charge = _rate_value(row)
-                break
-        existing = db.scalar(select(Tariff).where(
-            Tariff.meter_id == meter.id,
-            Tariff.provider_tariff_ref == tariff_code,
-            Tariff.valid_from == start,
-        ))
-        values = {
-            "product_code": product_code,
-            "tariff_name": product_name,
-            "valid_from": start,
-            "valid_to": end,
-            "unit_rate_p_per_kwh": rate,
-            "standing_charge_p_per_day": charge,
-            "currency": "GBP",
-        }
-        if existing is None:
-            db.add(Tariff(meter_id=meter.id, provider_tariff_ref=tariff_code, **values))
-        else:
-            for key, value in values.items():
-                setattr(existing, key, value)
-        inserted += 1
+    for rate_type, units in rate_rows.items():
+        for unit in units:
+            start = _parse_dt(unit.get("valid_from"))
+            end = _parse_dt(unit.get("valid_to"))
+            rate = _rate_value(unit)
+            if not start or rate is None:
+                continue
+            if start < valid_from:
+                start = valid_from
+            if valid_to and (end is None or end > valid_to):
+                end = valid_to
+            charge = None
+            for row in standing:
+                charge_start = _parse_dt(row.get("valid_from"))
+                charge_end = _parse_dt(row.get("valid_to"))
+                if charge_start and charge_start <= start and (charge_end is None or start < charge_end):
+                    charge = _rate_value(row)
+                    break
+            # Store day and night rates as separate tariff rows. Keep the
+            # standing charge on the day row only so analytics counts it once.
+            tariff_ref = tariff_code if rate_type == "standard" else f"{tariff_code}:{rate_type}"
+            existing = db.scalar(select(Tariff).where(
+                Tariff.meter_id == meter.id,
+                Tariff.provider_tariff_ref == tariff_ref,
+                Tariff.valid_from == start,
+            ))
+            values = {
+                "product_code": product_code,
+                "tariff_name": product_name if rate_type == "standard" else f"{product_name} ({rate_type.title()})",
+                "valid_from": start,
+                "valid_to": end,
+                "unit_rate_p_per_kwh": rate,
+                "standing_charge_p_per_day": charge if rate_type != "night" else None,
+                "currency": "GBP",
+            }
+            if existing is None:
+                db.add(Tariff(meter_id=meter.id, provider_tariff_ref=tariff_ref, **values))
+            else:
+                for key, value in values.items():
+                    setattr(existing, key, value)
+            inserted += 1
     db.flush()
     return inserted
 
@@ -576,7 +604,7 @@ def octopus_energy_analytics(db: Session, household_id: str, days: int = 30) -> 
     def aware(value: datetime) -> datetime:
         return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
-    def active_tariff(meter_id: str, at: datetime):
+    def active_tariffs(meter_id: str, at: datetime) -> list[Tariff]:
         at = aware(at)
         matches = []
         for item in tariffs_by_meter.get(meter_id, []):
@@ -584,7 +612,10 @@ def octopus_energy_analytics(db: Session, household_id: str, days: int = 30) -> 
             valid_to = aware(item.valid_to) if item.valid_to else None
             if valid_from <= at and (valid_to is None or at < valid_to):
                 matches.append(item)
-        return max(matches, key=lambda item: aware(item.valid_from)) if matches else None
+        if not matches:
+            return []
+        latest_start = max(aware(item.valid_from) for item in matches)
+        return [item for item in matches if aware(item.valid_from) == latest_start]
 
     daily = defaultdict(lambda: {"import_kwh": Decimal("0"), "export_kwh": Decimal("0"), "cost_gbp": Decimal("0"), "standing_charge_gbp": Decimal("0"), "export_credit_gbp": Decimal("0"), "cost_complete": True})
     meter_days: set[tuple[str, date]] = set()
@@ -605,7 +636,15 @@ def octopus_energy_analytics(db: Session, household_id: str, days: int = 30) -> 
         row["export_kwh"] += exported
         total_import += imported
         total_export += exported
-        tariff = active_tariff(reading.meter_id, start)
+        active_rates = active_tariffs(reading.meter_id, start)
+        # A dual-register Economy 7 tariff has separate day/night rates. The
+        # consumption feed gives total kWh, not a register label, so do not
+        # invent a rate assignment or publish a misleading estimated cost.
+        dual_register = any(
+            item.provider_tariff_ref and item.provider_tariff_ref.endswith((":day", ":night"))
+            for item in active_rates
+        )
+        tariff = active_rates[0] if len(active_rates) == 1 and not dual_register else None
         unit_cost = None
         if imported > 0:
             if tariff is None or tariff.unit_rate_p_per_kwh is None:
@@ -637,8 +676,9 @@ def octopus_energy_analytics(db: Session, household_id: str, days: int = 30) -> 
         for offset in range(days):
             day = local_today - timedelta(days=offset)
             day_start = datetime.combine(day, time.min, tzinfo=zone).astimezone(timezone.utc)
-            tariff = active_tariff(meter.id, day_start)
-            if tariff is None or tariff.standing_charge_p_per_day is None:
+            active = active_tariffs(meter.id, day_start)
+            tariff = next((item for item in active if item.standing_charge_p_per_day is not None), None)
+            if tariff is None:
                 continue
             charge = tariff.standing_charge_p_per_day / Decimal("100")
             daily[day]["standing_charge_gbp"] += charge

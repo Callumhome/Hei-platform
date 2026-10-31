@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.base import Base
 from app.db.models import ElectricityReading, EnergyAccount, Household, Meter, Tariff
-from app.services.octopus_sync import _parse_dt, _rate_value, _tariff_product_code, octopus_energy_analytics
+from app.services.octopus_sync import _parse_dt, _rate_value, _tariff_product_code, _tariff_rate_endpoints, octopus_energy_analytics
 
 
 def test_octopus_date_and_tariff_parsing():
@@ -15,6 +15,13 @@ def test_octopus_date_and_tariff_parsing():
     assert _tariff_product_code("E-1R-AGILE-24-10-01-A") == "AGILE-24-10-01"
     assert _tariff_product_code("not-a-tariff") is None
     assert _rate_value({"value_inc_vat": "24.123"}) == Decimal("24.123")
+    assert _tariff_rate_endpoints("E-1R-AGILE-24-10-01-A") == {
+        "standard": "standard-unit-rates/"
+    }
+    assert _tariff_rate_endpoints("E-2R-VAR-22-11-01-H") == {
+        "day": "day-unit-rates/",
+        "night": "night-unit-rates/",
+    }
 
 
 def test_octopus_analytics_calculates_tariff_cost_and_export_credit():
@@ -58,6 +65,64 @@ def test_octopus_analytics_calculates_tariff_cost_and_export_credit():
         assert result["reading_count"] == 1
         assert result["today"]["import_kwh"] in {0.235, 0.0}
         assert result["currency"] == "GBP"
+    finally:
+        db.close()
+        engine.dispose()
+
+
+
+def test_economy7_analytics_does_not_guess_day_or_night_rate():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    db = Session(engine)
+    try:
+        household = Household(id="economy7-household", name="Economy 7 home", timezone="Europe/London")
+        db.add(household)
+        db.flush()
+        account = EnergyAccount(
+            id="economy7-account", household_id=household.id,
+            provider="octopus", provider_account_ref="economy7-account-hash",
+        )
+        db.add(account)
+        db.flush()
+        meter = Meter(
+            id="economy7-meter", energy_account_id=account.id,
+            provider_meter_ref="economy7-mpan:serial", fuel="electricity", meter_type="import",
+        )
+        db.add(meter)
+        db.flush()
+        now = datetime.now(timezone.utc)
+        interval_start = now.replace(minute=0, second=0, microsecond=0) - timedelta(minutes=30)
+        tariff_start = now - timedelta(days=2)
+        db.add_all([
+            Tariff(
+                meter_id=meter.id, provider_tariff_ref="E-2R-TEST-H:day",
+                valid_from=tariff_start, valid_to=None,
+                unit_rate_p_per_kwh=Decimal("30"),
+                standing_charge_p_per_day=Decimal("50"),
+            ),
+            Tariff(
+                meter_id=meter.id, provider_tariff_ref="E-2R-TEST-H:night",
+                valid_from=tariff_start, valid_to=None,
+                unit_rate_p_per_kwh=Decimal("10"),
+                standing_charge_p_per_day=None,
+            ),
+        ])
+        db.add(ElectricityReading(
+            meter_id=meter.id, interval_start=interval_start,
+            interval_end=interval_start + timedelta(minutes=30),
+            consumption_kwh=Decimal("1.000"), export_kwh=Decimal("0"),
+            source_provider="octopus", quality="unknown",
+        ))
+        db.commit()
+
+        result = octopus_energy_analytics(db, household.id, 7)
+        assert result["reading_count"] == 1
+        assert result["cost_complete"] is False
+        assert result["today"]["cost_complete"] is False
+        assert result["half_hourly"][-1]["unit_rate_p_per_kwh"] is None
+        # Standing charge is counted once, not once for each register.
+        assert result["period_energy_cost_gbp"] == 1.0
     finally:
         db.close()
         engine.dispose()
