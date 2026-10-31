@@ -30,7 +30,7 @@ from app.services.ingestion import (
 OCTOPUS_BASE = "https://api.octopus.energy/v1/"
 REQUIRED_SCOPES = {"account_details", "electricity_consumption", "tariff_data"}
 PAGE_SIZE = 25_000
-AUTO_SYNC_HOURS = 6
+AUTO_SYNC_HOURS = 0.5
 
 
 class OctopusSyncError(Exception):
