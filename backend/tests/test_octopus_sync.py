@@ -1,12 +1,18 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+import httpx
+import pytest
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.db.base import Base
 from app.db.models import ElectricityReading, EnergyAccount, Household, Meter, Tariff
-from app.services.octopus_sync import _parse_dt, _rate_value, _tariff_product_code, _tariff_rate_endpoints, octopus_energy_analytics
+from app.services.octopus_sync import (
+    OctopusSyncError, _get_json, _parse_dt, _rate_value,
+    _tariff_product_code, _tariff_rate_endpoints, octopus_energy_analytics,
+)
 
 
 def test_octopus_date_and_tariff_parsing():
@@ -126,3 +132,32 @@ def test_economy7_analytics_does_not_guess_day_or_night_rate():
     finally:
         db.close()
         engine.dispose()
+
+
+
+def test_octopus_bad_request_reports_safe_endpoint_and_provider_detail():
+    def handler(request):
+        return httpx.Response(
+            400,
+            json={"detail": "Invalid request for meter 1234567890123"},
+            request=request,
+        )
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(
+        base_url="https://api.octopus.energy/v1/",
+        transport=transport,
+    ) as client:
+        with pytest.raises(OctopusSyncError) as exc_info:
+            _get_json(
+                client,
+                "electricity-meter-points/1234567890123/meters/METER-SERIAL-123/consumption/",
+            )
+
+    error = exc_info.value
+    assert error.code == "OCTOPUS_BAD_REQUEST"
+    assert "HTTP 400" in str(error)
+    assert "electricity-meter-points/[redacted]/meters/[redacted]/consumption" in str(error)
+    assert "Invalid request for meter [redacted]" in str(error)
+    assert "1234567890123" not in str(error)
+    assert "METER-SERIAL-123" not in str(error)

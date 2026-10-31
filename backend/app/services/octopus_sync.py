@@ -79,6 +79,34 @@ def _client(api_key: str) -> httpx.Client:
     )
 
 
+def _safe_endpoint_label(url: str) -> str:
+    """Describe the Octopus endpoint without retaining account or meter identifiers."""
+    parts = urlsplit(url)
+    segments = [segment for segment in parts.path.split("/") if segment]
+    for index, segment in enumerate(segments[:-1]):
+        if segment in {"accounts", "electricity-meter-points", "gas-meter-points", "meters"}:
+            segments[index + 1] = "[redacted]"
+    return "/" + "/".join(segments)
+
+
+def _safe_provider_detail(response: httpx.Response) -> str:
+    """Extract a short provider explanation while removing long numeric identifiers."""
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+    if isinstance(payload, dict):
+        detail = payload.get("detail") or payload.get("message") or payload.get("error")
+    else:
+        detail = None
+    if not isinstance(detail, str) or not detail.strip():
+        detail = response.reason_phrase or "No provider explanation supplied"
+    detail = re.sub(r"\s+", " ", detail).strip()
+    # Do not persist MPANs, meter serials, account numbers, or other long numeric IDs.
+    detail = re.sub(r"\b\d{8,}\b", "[redacted]", detail)
+    return detail[:220]
+
+
 def _get_json(client: httpx.Client, url: str, params: dict | None = None) -> dict:
     for attempt in range(4):
         try:
@@ -96,9 +124,11 @@ def _get_json(client: httpx.Client, url: str, params: dict | None = None) -> dic
             if response.status_code == 404:
                 raise OctopusSyncError("OCTOPUS_RESOURCE_NOT_FOUND", "An Octopus account, meter or tariff resource was not found.", False)
             if 400 <= response.status_code < 500:
+                endpoint = _safe_endpoint_label(str(response.request.url))
+                detail = _safe_provider_detail(response)
                 raise OctopusSyncError(
                     "OCTOPUS_BAD_REQUEST",
-                    f"Octopus rejected a request (HTTP {response.status_code}).",
+                    f"Octopus HTTP {response.status_code} at {endpoint}: {detail}",
                     False,
                 )
             response.raise_for_status()
