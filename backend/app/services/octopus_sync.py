@@ -667,7 +667,8 @@ def octopus_energy_analytics(db: Session, household_id: str, days: int = 30) -> 
         "today": {
             "import_kwh": round(float(today["import_kwh"]), 3),
             "export_kwh": round(float(today["export_kwh"]), 3),
-            "cost_gbp": round(float(today["cost_gbp"]), 2),
+            "cost_gbp": round(float(today["cost_gbp"] + today["standing_charge_gbp"] - today["export_credit_gbp"]), 2),
+            "export_credit_gbp": round(float(today["export_credit_gbp"]), 2),
             "cost_complete": bool(today["cost_complete"]),
         },
         "last_7_days_import_kwh": round(week_import, 3),
