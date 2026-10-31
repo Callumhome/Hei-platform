@@ -640,7 +640,11 @@ def octopus_energy_analytics(db: Session, household_id: str, days: int = 30) -> 
         # A dual-register Economy 7 tariff has separate day/night rates. The
         # consumption feed gives total kWh, not a register label, so do not
         # invent a rate assignment or publish a misleading estimated cost.
-        tariff = active_rates[0] if len(active_rates) == 1 else None
+        dual_register = any(
+            item.provider_tariff_ref and item.provider_tariff_ref.endswith((":day", ":night"))
+            for item in active_rates
+        )
+        tariff = active_rates[0] if len(active_rates) == 1 and not dual_register else None
         unit_cost = None
         if imported > 0:
             if tariff is None or tariff.unit_rate_p_per_kwh is None:
