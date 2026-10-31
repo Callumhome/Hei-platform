@@ -128,6 +128,9 @@ class ElectricityReading(Base):
     interval_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     consumption_kwh: Mapped[Decimal] = mapped_column(Numeric(14, 6))
     source_record_ref: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    export_kwh: Mapped[Decimal | None] = mapped_column(Numeric(14, 6), nullable=True)
+    source_provider: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    quality: Mapped[str] = mapped_column(String(24), default="unknown", nullable=False)
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     meter: Mapped[Meter] = relationship(back_populates="readings")
@@ -229,4 +232,27 @@ class ConsentGrant(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SyncJob(Base):
+    __tablename__ = "sync_jobs"
+    __table_args__ = (
+        Index("ix_sync_jobs_household_created", "household_id", "created_at"),
+        Index("ix_sync_jobs_status_next", "status", "next_attempt_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    household_id: Mapped[str] = mapped_column(ForeignKey("households.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(60), nullable=False)
+    job_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="queued", nullable=False)
+    cursor: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    attempts: Mapped[int] = mapped_column(default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(default=5, nullable=False)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
