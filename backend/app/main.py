@@ -1,3 +1,6 @@
+import asyncio
+from contextlib import asynccontextmanager, suppress
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,10 +15,33 @@ from app.api.octopus import router as octopus_router
 
 settings = get_settings()
 
+
+async def _octopus_refresh_worker() -> None:
+    # One API container runs this lightweight due-check. Actual imports execute
+    # in a worker thread and are guarded against overlapping household jobs.
+    from app.services.octopus_sync import sync_due_octopus_connections
+
+    while True:
+        await asyncio.sleep(900)
+        await asyncio.to_thread(sync_due_octopus_connections)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    worker = asyncio.create_task(_octopus_refresh_worker())
+    try:
+        yield
+    finally:
+        worker.cancel()
+        with suppress(asyncio.CancelledError):
+            await worker
+
+
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
     description="A supplier-neutral foundation for UK household electricity intelligence.",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
