@@ -4,6 +4,8 @@
   const tokenStore = sessionStorage;
   let currentMode = "login";
   let household = null;
+  let activeView = "live";
+  let historyDays = 30;
 
   function notice(message, error = false, target = "auth-notice") {
     const el = $(target); el.textContent = message; el.classList.toggle("error", error); el.hidden = false;
@@ -52,8 +54,38 @@
   }
   function saveSession(data) { tokenStore.setItem("hei_access",data.access_token); tokenStore.setItem("hei_refresh",data.refresh_token); tokenStore.setItem("hei_user",JSON.stringify(data.user)); }
   function clearSession() { ["hei_access","hei_refresh","hei_user","hei_household"].forEach(k=>tokenStore.removeItem(k)); }
+  function showAppView(view) {
+    activeView = view;
+    ["live","history","settings"].forEach(name => {
+      const section = $(name + "-view");
+      if (section) section.hidden = name !== view;
+      const button = document.querySelector('[data-view-target="' + name + '"]');
+      if (button) {
+        button.classList.toggle("active", name === view);
+        if (name === view) button.setAttribute("aria-current","page");
+        else button.removeAttribute("aria-current");
+      }
+    });
+    if (view === "history" && household) loadOctopusHistory(historyDays);
+    window.scrollTo({top:0,behavior:"smooth"});
+  }
+  document.querySelectorAll("[data-view-target]").forEach(button => {
+    button.addEventListener("click", () => showAppView(button.dataset.viewTarget));
+  });
+  document.querySelectorAll("[data-history-days]").forEach(button => {
+    button.addEventListener("click", () => {
+      historyDays = Number(button.dataset.historyDays);
+      document.querySelectorAll("[data-history-days]").forEach(item => {
+        const selected = item === button;
+        item.classList.toggle("active",selected);
+        item.setAttribute("aria-pressed",String(selected));
+      });
+      if (household) loadOctopusHistory(historyDays);
+    });
+  });
   function showDashboard(user) {
     $("auth-view").hidden = true; $("dashboard-view").hidden = false; $("top-actions").hidden = false; $("user-label").textContent = user.display_name || user.email;
+    showAppView("live");
     $("dashboard-title").textContent = "Good to see you" + (user.display_name ? ", " + user.display_name.split(" ")[0] : ".") + (user.display_name ? "." : "");
     loadHouseholds();
   }
@@ -278,6 +310,51 @@
       }
     } catch(_) {
       // Keep the existing dashboard state if no Octopus readings have arrived yet.
+    }
+  }
+  async function loadOctopusHistory(days) {
+    const host=$("history-chart"), list=$("history-days-list");
+    host.replaceChildren(node("p","muted","Loading your electricity history…"));
+    list.replaceChildren();
+    $("history-notice").hidden=true;
+    try {
+      const data=await api("/api/v1/households/"+household.id+"/octopus/analytics?days="+days);
+      $("history-import").innerHTML=(data.period_import_kwh||0).toFixed(2)+' <small>kWh</small>';
+      $("history-export").innerHTML=(data.period_export_kwh||0).toFixed(2)+' <small>kWh</small>';
+      $("history-cost").innerHTML=data.cost_complete?("£"+(data.period_energy_cost_gbp||0).toFixed(2)+' <small>GBP</small>'):'— <small>GBP</small>';
+      $("history-import-copy").textContent="Across "+days+" days · "+(data.reading_count||0).toLocaleString()+" half-hourly readings";
+      $("history-cost-copy").textContent=data.cost_complete?"Tariff and standing-charge estimate":"Incomplete tariff coverage — total not shown";
+      $("history-period-label").textContent="LAST "+(days===365?"12 MONTHS":days+" DAYS");
+      const daily=(data.daily||[]);
+      host.replaceChildren();
+      if(!daily.length) host.append(node("p","muted","No readings were found for this period."));
+      else {
+        const bars=node("div","history-bars");
+        const max=Math.max(0.01,...daily.map(day=>day.import_kwh||0));
+        daily.forEach(day=>{
+          const wrap=node("div","history-bar-wrap");
+          const bar=node("span","history-bar");
+          bar.style.height=Math.max(2,(day.import_kwh||0)/max*100)+"%";
+          bar.title=new Date(day.date+"T12:00:00").toLocaleDateString()+" · "+Number(day.import_kwh||0).toFixed(2)+" kWh";
+          wrap.append(bar); bars.append(wrap);
+        });
+        host.append(bars);
+        const axis=node("div","history-axis");
+        axis.append(node("span",null,daily[0].date),node("span",null,daily[Math.floor(daily.length/2)].date),node("span",null,daily[daily.length-1].date));
+        host.append(axis);
+      }
+      [...daily].reverse().forEach(day=>{
+        const row=node("div","history-day-row");
+        const date=node("strong",null,new Date(day.date+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short",year:"numeric"}));
+        const usage=node("span",null,Number(day.import_kwh||0).toFixed(2)+" kWh");
+        const cost=node("span",day.cost_complete?"history-cost-value":"history-cost-muted",day.cost_complete?"£"+Number(day.cost_gbp||0).toFixed(2):"Cost incomplete");
+        row.append(date,usage,cost); list.append(row);
+      });
+    } catch(err) {
+      host.replaceChildren(node("p","muted","Couldn't load your energy history."));
+      $("history-notice").textContent=err.message||"History request failed.";
+      $("history-notice").classList.add("error");
+      $("history-notice").hidden=false;
     }
   }
   $("octopus-sync-button").addEventListener("click",async()=>{
