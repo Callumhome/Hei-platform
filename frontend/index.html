@@ -87,6 +87,16 @@
         <section class="panel chart-panel"><div class="panel-heading"><div><div class="eyebrow">CONSUMPTION</div><h2>Electricity usage</h2></div><span class="tag">HALF-HOURLY</span></div><div id="usage-chart" class="empty-chart"><div class="chart-lines"><i></i><i></i><i></i><i></i></div><div id="chart-empty-copy" class="chart-empty-copy"><span class="chart-symbol">⌁</span><strong>Your energy story starts here</strong><p>Enable Demo Mode to preview a simulated half-hourly usage profile.</p></div><div id="demo-chart" class="demo-chart" hidden aria-label="Simulated half-hourly electricity consumption chart"></div></div></section>
 
       </div>
+      <section class="panel live-sensors-panel">
+        <div class="panel-heading"><div><div class="eyebrow">HOME ASSISTANT · LIVE TELEMETRY</div><h2>Live power</h2></div><span id="live-sensor-status" class="tag">WAITING FOR HOME ASSISTANT</span></div>
+        <p id="live-sensor-updated" class="muted">Connect Home Assistant in Settings to display live power readings. Values refresh automatically every 15 seconds.</p>
+        <div class="live-sensor-grid">
+          <article class="live-sensor-card"><span>HOME DEMAND</span><strong id="ha-live-demand">—</strong><small id="ha-live-demand-source">No power sensor selected</small></article>
+          <article class="live-sensor-card"><span>SOLAR GENERATION</span><strong id="ha-live-solar">—</strong><small id="ha-live-solar-source">No power sensor selected</small></article>
+          <article class="live-sensor-card"><span>GRID IMPORT</span><strong id="ha-live-grid">—</strong><small id="ha-live-grid-source">No power sensor selected</small></article>
+          <article class="live-sensor-card"><span>HEAT PUMP</span><strong id="ha-live-heatpump">—</strong><small id="ha-live-heatpump-source">No power sensor selected</small></article>
+        </div>
+      </section>
       </section>
       <section id="history-view" class="app-view" hidden>
         <div class="view-heading"><div><div class="eyebrow">YOUR ENERGY OVER TIME</div><h2>Energy history</h2><p class="muted">Explore daily electricity consumption, exports and estimated costs from your imported meter readings.</p></div></div>
@@ -145,6 +155,12 @@
         <div id="octopus-connected" class="octopus-connected" hidden><p id="octopus-summary" class="muted"></p><div class="octopus-sync"><p id="octopus-sync-summary" class="hint">Historical consumption and tariff import will start automatically after connecting.</p><button id="octopus-sync-button" class="button button-secondary" type="button">Import / update energy data →</button></div><button id="octopus-disconnect" class="button button-quiet" type="button">Disconnect Octopus</button></div>
         <div id="octopus-notice" class="notice" role="status" aria-live="polite" hidden></div>
       </section>
+      </section>
+      <nav class="bottom-nav" aria-label="Main navigation">
+        <button class="nav-button active" type="button" data-view-target="live" aria-current="page"><span class="nav-icon" aria-hidden="true">⌁</span><span>Live</span></button>
+        <button class="nav-button" type="button" data-view-target="history"><span class="nav-icon" aria-hidden="true">▥</span><span>History</span></button>
+        <button class="nav-button" type="button" data-view-target="settings"><span class="nav-icon" aria-hidden="true">⚙</span><span>Settings</span></button>
+      </nav>
       <footer class="dashboard-footer">HEI · Home Energy Intelligence <span>Private by design</span></footer>
     </section>
     <footer class="site-footer">Your energy data stays yours. <span>·</span> Home Energy Intelligence</footer>

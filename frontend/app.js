@@ -6,6 +6,8 @@
   let household = null;
   let activeView = "live";
   let historyDays = 30;
+  let liveRefreshTimer = null;
+  let latestHAEntities = [];
 
   function notice(message, error = false, target = "auth-notice") {
     const el = $(target); el.textContent = message; el.classList.toggle("error", error); el.hidden = false;
@@ -195,10 +197,13 @@
         $("ha-connected").hidden = false;
         $("ha-status").textContent = "CONNECTED";
         await refreshHomeAssistantEntities();
+        startLiveRefresh();
       } else {
         $("ha-connect-form").hidden = false;
         $("ha-connected").hidden = true;
         $("ha-status").textContent = "NOT CONNECTED";
+        stopLiveRefresh();
+        renderLiveTelemetry([]);
       }
     } catch (_) { $("ha-status").textContent = "CHECK CONNECTION"; }
   }
@@ -206,7 +211,9 @@
     $("ha-entities").textContent = "Loading energy sensors…";
     try {
       const data = await api("/api/v1/households/" + household.id + "/home-assistant/entities");
-      $("ha-summary").textContent = data.entities.length + " energy-related sensors discovered. Choose the readings to use in a later setup step.";
+      latestHAEntities = data.entities || [];
+      $("ha-summary").textContent = latestHAEntities.length + " energy-related sensors discovered. Live power readings refresh automatically every 15 seconds.";
+      renderLiveTelemetry(latestHAEntities);
       $("ha-entities").replaceChildren();
       data.entities.forEach(entity => {
         const row = document.createElement("div"); row.className = "ha-entity";
@@ -215,7 +222,71 @@
         const value = document.createElement("span"); value.textContent = entity.state + (entity.unit ? " " + entity.unit : "");
         row.append(left,value); $("ha-entities").append(row);
       });
-    } catch (_) { $("ha-entities").textContent = "Couldn't retrieve sensors. Try refreshing."; }
+    } catch (_) {
+      $("ha-entities").textContent = "Couldn't retrieve sensors. Try refreshing.";
+      $("live-sensor-status").textContent = "CONNECTION ERROR";
+    }
+  }
+  function isPowerEntity(entity) {
+    const unit = String(entity.unit || "").toLowerCase().replace(/\s/g,"");
+    return entity.device_class === "power" || ["w","kw","mw"].includes(unit);
+  }
+  function findLiveSensor(entities, pattern) {
+    return entities.find(entity => isPowerEntity(entity) && pattern.test((entity.entity_id + " " + entity.name).toLowerCase()) && Number.isFinite(Number(entity.state)));
+  }
+  function renderPowerCard(valueId, sourceId, entity) {
+    const value = $(valueId), source = $(sourceId);
+    if (!entity) {
+      value.textContent = "—";
+      source.textContent = "No matching live power sensor";
+      return;
+    }
+    const number = Number(entity.state);
+    const unit = entity.unit || "";
+    value.textContent = number.toLocaleString(undefined,{maximumFractionDigits:2}) + (unit ? " " + unit : "");
+    source.textContent = entity.name + " · " + (entity.last_updated ? new Date(entity.last_updated).toLocaleTimeString() : "state received");
+  }
+  function renderLiveTelemetry(entities) {
+    const demand = findLiveSensor(entities,/current.?demand|home.?demand|house.?power|home.?power|whole.?home|total.?power/);
+    const solar = findLiveSensor(entities,/solar|\bpv\b|photovoltaic|generation/);
+    const grid = findLiveSensor(entities,/grid.*(import|power)|import.*power|mains|utility.*power/);
+    const heatpump = findLiveSensor(entities,/heat.?pump|ecodan|ashp/);
+    renderPowerCard("ha-live-demand","ha-live-demand-source",demand);
+    renderPowerCard("ha-live-solar","ha-live-solar-source",solar);
+    renderPowerCard("ha-live-grid","ha-live-grid-source",grid);
+    renderPowerCard("ha-live-heatpump","ha-live-heatpump-source",heatpump);
+    const updated = entities.map(item => item.last_updated).filter(Boolean).sort().pop();
+    if (entities.length) {
+      $("live-sensor-status").textContent = "HOME ASSISTANT · REFRESHING";
+      $("live-sensor-updated").textContent = "Latest Home Assistant state: " + (updated ? new Date(updated).toLocaleString() : "received") + ". HEI checks again every 15 seconds. Values are live only when the source sensor itself updates.";
+    } else {
+      $("live-sensor-status").textContent = "NO LIVE SENSORS";
+      $("live-sensor-updated").textContent = "Connect Home Assistant and expose power sensors (W or kW) for live demand, solar, grid and heat-pump readings.";
+    }
+    if (demand) {
+      const n=Number(demand.state), unit=String(demand.unit||"").toLowerCase();
+      const kw=unit==="w"?n/1000:unit==="mw"?n*1000:unit==="kw"?n:null;
+      if (kw!==null) {
+        $("live-demand-value").innerHTML=kw.toFixed(2)+' <small>kW</small>';
+        $("live-demand-copy").textContent="Live Home Assistant reading · "+demand.name;
+      } else {
+        $("live-demand-value").textContent=n.toLocaleString()+" "+(demand.unit||"");
+        $("live-demand-copy").textContent="Live Home Assistant reading · "+demand.name;
+      }
+    } else {
+      $("live-demand-value").innerHTML='— <small>kW</small>';
+      $("live-demand-copy").textContent="Connect a live power sensor in Home Assistant";
+    }
+  }
+  function startLiveRefresh() {
+    stopLiveRefresh();
+    liveRefreshTimer = setInterval(() => {
+      if (household && tokenStore.getItem("hei_access")) refreshHomeAssistantEntities();
+    },15000);
+  }
+  function stopLiveRefresh() {
+    if (liveRefreshTimer) clearInterval(liveRefreshTimer);
+    liveRefreshTimer = null;
   }
   $("ha-connect-form").addEventListener("submit", async e => {
     e.preventDefault();
@@ -228,7 +299,10 @@
       $("ha-token").value = "";
       $("ha-connect-form").hidden = true; $("ha-connected").hidden = false;
       $("ha-status").textContent = "CONNECTED";
-      $("ha-summary").textContent = result.entity_count + " energy-related sensors discovered.";
+      latestHAEntities = result.entities || [];
+      $("ha-summary").textContent = result.entity_count + " energy-related sensors discovered. Live power readings refresh automatically every 15 seconds.";
+      renderLiveTelemetry(latestHAEntities);
+      startLiveRefresh();
       $("ha-entities").replaceChildren();
       result.entities.forEach(entity => {
         const row=document.createElement("div");row.className="ha-entity";
@@ -244,7 +318,7 @@
   $("ha-refresh").addEventListener("click",refreshHomeAssistantEntities);
   $("ha-disconnect").addEventListener("click",async()=>{
     if(!confirm("Disconnect Home Assistant from this household?"))return;
-    try { await api("/api/v1/households/"+household.id+"/home-assistant",{method:"DELETE"}); $("ha-connected").hidden=true;$("ha-connect-form").hidden=false;$("ha-token").value="";$("ha-status").textContent="NOT CONNECTED"; }
+    try { await api("/api/v1/households/"+household.id+"/home-assistant",{method:"DELETE"}); stopLiveRefresh(); latestHAEntities=[];renderLiveTelemetry([]);$("ha-connected").hidden=true;$("ha-connect-form").hidden=false;$("ha-token").value="";$("ha-status").textContent="NOT CONNECTED"; }
     catch(_) { $("ha-notice").textContent="Couldn't disconnect Home Assistant."; $("ha-notice").hidden=false; }
   });
 
