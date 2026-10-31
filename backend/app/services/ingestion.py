@@ -28,6 +28,7 @@ def mark_sync_started(db: Session, job: SyncJob) -> None:
     job.status = "running"
     job.attempts += 1
     job.started_at = datetime.now(timezone.utc)
+    job.finished_at = None
     job.next_attempt_at = None
     job.error_code = None
     job.error_message = None
@@ -62,8 +63,14 @@ def mark_sync_failed(db: Session, job: SyncJob, *, error_code: str, error_messag
 def ingest_reading_page(db: Session, *, meter_id: str, provider: str, readings: tuple) -> tuple[int, int]:
     """Persist normalized intervals once; return (inserted, duplicate_count)."""
     inserted = duplicates = 0
+    seen_intervals: set[tuple[datetime, datetime]] = set()
     for reading in readings:
         reading.validate()
+        interval_key = (reading.interval_start, reading.interval_end)
+        if interval_key in seen_intervals:
+            duplicates += 1
+            continue
+        seen_intervals.add(interval_key)
         existing = db.scalar(select(ElectricityReading).where(
             ElectricityReading.meter_id == meter_id,
             ElectricityReading.interval_start == reading.interval_start,
